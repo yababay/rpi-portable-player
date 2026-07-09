@@ -1,0 +1,2 @@
+KERNEL=="sd[a-z][0-9]", SUBSYSTEM=="block", ACTION=="add", ENV{UDISKS_IGNORE}="1", TAG+="systemd", ENV{SYSTEMD_WANTS}="mpd-usb-mount@%k.service"
+KERNEL=="sd[a-z][0-9]", SUBSYSTEM=="block", ACTION=="remove", RUN+="/bin/systemctl stop mpd-usb-mount@%k.service"
