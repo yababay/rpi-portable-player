@@ -1,0 +1,9 @@
+[Unit]
+Description=Automount USB Drive for MPD on %I
+After=mpd.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/mpd-usb-automount.sh /dev/%i add
+ExecStop=/usr/local/bin/mpd-usb-automount.sh /dev/%i remove
