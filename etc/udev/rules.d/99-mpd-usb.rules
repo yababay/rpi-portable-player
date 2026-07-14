@@ -1,2 +1,2 @@
-KERNEL=="sd[a-z][0-9]", SUBSYSTEM=="block", ACTION=="add", ENV{UDISKS_IGNORE}="1", TAG+="systemd", ENV{SYSTEMD_WANTS}="mpd-usb-mount@%k.service"
-KERNEL=="sd[a-z][0-9]", SUBSYSTEM=="block", ACTION=="remove", RUN+="/bin/systemctl stop mpd-usb-mount@%k.service"
+KERNEL=="sd[a-z][0-9]", ACTION=="add",    SUBSYSTEM=="block", RUN+="/usr/bin/systemctl restart mnt-music.automount", SYMLINK+="music"
+KERNEL=="sd[a-z][0-9]", ACTION=="remove", SUBSYSTEM=="block", RUN+="/usr/bin/systemd-umount /mnt/music"
