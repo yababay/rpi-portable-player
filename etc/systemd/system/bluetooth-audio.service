@@ -1,0 +1,13 @@
+[Unit]
+Description=MPD Bluetooth Headphones Trigger (System-wide)
+After=bluetooth.target sound.target
+Requires=bluetooth.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/bluetooth-audio
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
