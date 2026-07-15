@@ -1,0 +1,19 @@
+#!/bin/sh
+set -e
+
+echo "Настройка rpi-portable-player..."
+
+# Перезагружаем правила udev
+udevadm control --reload-rules && udevadm trigger
+
+# Перезагружаем менеджер сервисов systemd
+systemctl daemon-reload
+
+# Включаем и запускаем наши триггеры
+systemctl enable music-mount.service
+systemctl enable bluetooth-audio.service
+systemctl start bluetooth-audio.service
+
+
+echo "Установка завершена успешно! Система готова к работе."
+exit 0

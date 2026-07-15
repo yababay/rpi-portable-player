@@ -6,3 +6,8 @@ reload:
 find:
 	find . -path ./.git -prune -o -type f -print
 
+git:
+	git add .
+	git commit -am from-radxa
+	git push origin main
+

@@ -1,0 +1,9 @@
+Package: rpi-portable-player
+Version: 1.0.0
+Section: sound
+Priority: optional
+Architecture: arm64
+Maintainer: yababay <yababay@github.com>
+Depends: mpd, mpc, bluez, bluez-tools, pipewire, wireplumber, pipewire-pulse, dbus, util-linux, sudo
+Description: Headless portable MPD player for Radxa Zero with auto-mount and Bluetooth triggers.
+
