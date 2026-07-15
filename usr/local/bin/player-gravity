@@ -1,0 +1,22 @@
+#!/bin/bash
+
+TARGET_USER=$(id -nu 1000)
+MPC_CMD="sudo -u $TARGET_USER MPD_HOST=127.0.0.1 MPD_PORT=6600 /usr/bin/mpc"
+
+case "$1" in
+    sleep)
+        echo "Плеер перевернут. Засыпаем..."
+        # Ставим музыку на паузу
+        $MPC_CMD pause
+        # Принудительно отключаем наушники, чтобы они заснули
+        bluetoothctl disconnect
+        # Переводим процессор в ультра-экономичный режим
+        echo "powersave" | tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor > /dev/null
+        ;;
+    wake)
+        echo "Плеер возвращен в рабочее положение. Просыпаемся..."
+        # Возвращаем процессору режим автоматической частоты
+        echo "ondemand" | tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor > /dev/null
+        # Наш основной bluetooth-audio сервис сам поймает коннект наушников и запустит музыку!
+        ;;
+esac
