@@ -8,9 +8,9 @@ After=dev-music.device
 Type=oneshot
 RemainAfterExit=yes
 # Что делать при подключении флешки:
-ExecStart=/usr/local/bin/music-mount
+ExecStart=/usr/local/bin/music-mount start
 # Что делать при физическом отключении (извлечении) флешки:
-ExecStop=/usr/local/bin/music-umount
+ExecStop=/usr/local/bin/music-mount stop
 
 [Install]
 WantedBy=multi-user.target
