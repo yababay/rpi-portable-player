@@ -1,20 +1,24 @@
 #!/bin/bash
 
-# Переменная для отслеживания текущего состояния (0 - норма, 1 - перевернут)
-# При старте проверяем реальное положение (используем gpioget)
-LAST_STATE=$(gpioget $(gpiofind "GPIOAO_3"))
+CHIP="gpiochip1"
+LINE=3
 
-# Запускаем мониторинг прерываний на линии GPIOAO_3
-gpiomon --falling --rising $(gpiofind "GPIOAO_3") | while read -r line; do
-    # gpiomon выплевывает строку при каждом изменении. Читаем текущий статус заново:
-    CURRENT_STATE=$(gpioget $(gpiofind "GPIOAO_3"))
+# Считываем стартовое состояние (возвращает "3"=active или "3"=inactive)
+# Вырезаем только само слово после знака равенства
+LAST_STATE=$(gpioget -c "$CHIP" "$LINE" | cut -d'=' -f2)
+
+# Запускаем мониторинг линии
+gpiomon -c "$CHIP" "$LINE" | while read -r event; do
+    # Как только прилетело событие прерывания, считываем актуальный статус пина
+    CURRENT_STATE=$(gpioget -c "$CHIP" "$LINE" | cut -d'=' -f2)
     
+    # Защита от дребезга контактов шарика: если состояние действительно изменилось
     if [ "$CURRENT_STATE" != "$LAST_STATE" ]; then
-        if [ "$CURRENT_STATE" -eq 1 ]; then
-            # Цепь разомкнулась (шарик улетел) -> плеер перевернули
+        if [ "$CURRENT_STATE" = "active" ]; then
+            # Цепь разомкнулась, сработала подтяжка -> плеер перевернули вверх дном
             /usr/local/bin/gravity-player sleep
-        else
-            # Цепь замкнулась на GND -> плеер вернули на ноги
+        elif [ "$CURRENT_STATE" = "inactive" ]; then
+            # Цепь замкнулась на GND -> плеер вернули в нормальное положение
             /usr/local/bin/gravity-player wake
         fi
         LAST_STATE=$CURRENT_STATE
