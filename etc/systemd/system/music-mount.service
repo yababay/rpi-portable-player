@@ -1,13 +1,16 @@
 [Unit]
-Description=Mount music USB and start playing
-After=systemd-udevd.service
+Description=Управление монтированием USB-флешки с музыкой
+# Привязываем сервис к udev-ноде флешки. Если она исчезнет — сервис принудительно остановится
+BindsTo=dev-music.device
+After=dev-music.device
 
 [Service]
 Type=oneshot
-ExecStartPre=/usr/bin/ip link set wlan0 down
-ExecStart=/usr/bin/mount /dev/music /mnt/music
-ExecStartPost=/usr/local/bin/music-mount
+RemainAfterExit=yes
+# Что делать при подключении флешки:
+ExecStart=/usr/local/bin/music-mount
+# Что делать при физическом отключении (извлечении) флешки:
+ExecStop=/usr/local/bin/music-umount
 
 [Install]
 WantedBy=multi-user.target
-
