@@ -1,7 +1,0 @@
-[Unit]
-Description=Stop mpd when music USB is removed
-
-[Service]
-Type=oneshot
-ExecStart=/usr/local/bin/music-umount
-
