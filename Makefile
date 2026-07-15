@@ -11,6 +11,7 @@ build_structure: clean
 	mkdir -p $(BUILD_DIR)/etc/udev/rules.d
 	mkdir -p $(BUILD_DIR)/etc/systemd/system
 	mkdir -p $(BUILD_DIR)/usr/local/bin
+	mkdir -p $(BUILD_DIR)/etc/wireplumber/wireplumber.conf.d
 
 	# Копируем метаданные пакета
 	cp DEBIAN/control $(BUILD_DIR)/DEBIAN/
@@ -21,6 +22,7 @@ build_structure: clean
 	cp etc/udev/rules.d/99-music.rules $(BUILD_DIR)/etc/udev/rules.d/
 	cp etc/systemd/system/music-mount.service $(BUILD_DIR)/etc/systemd/system/
 	cp etc/systemd/system/mpd-bluetooth-trigger.service $(BUILD_DIR)/etc/systemd/system/
+	cp etc/wireplumber/wireplumber.conf.d/50-bluez-no-seat.conf $(BUILD_DIR)/etc/wireplumber/wireplumber.conf.d/
 
 	# Копируем исполняемые скрипты
 	cp usr/local/bin/music-mount $(BUILD_DIR)/usr/local/bin/
