@@ -1,22 +1,89 @@
 #!/bin/bash
 
+# Настройки
 MOUNT_POINT="/mnt/music"
 STATE_DIR="/var/lib/mpd/usb_states"
-UUID="`lsblk -f | egrep sd[a-z][0-9] | egrep -o '[A-Z0-9]{4}-[A-Z0-9]{4}`"
+mkdir -p "$STATE_DIR"
 
-if [ -f "$MOUNT_POINT/autoplay.m3u" ]; then
-	/usr/bin/mpc random off
-	cat "$MOUNT_POINT/autoplay.m3u" | while read l; do /usr/bin/mpc add "$l"; done
-	if [ -f "$STATE_FILE" ]; then
-		read TRACK TIME < "$STATE_FILE"
-		/usr/bin/mpc play $TRACK
-		/usr/bin/mpc seek $TIME
-	# else
-	#	/usr/bin/mpc play
-	fi
-else
-	/usr/bin/mpc listall | /usr/bin/mpc add
-	/usr/bin/mpc random on
-	# /usr/bin/mpc play
+# Переменные от udev (работают, если сервис вызван правильно) или фолбек на blkid
+# Для надежности берем UUID конкретно того устройства, которое активировало сервис
+DEVICE="/dev/music"
+UUID=$(/sbin/blkid -o value -s UUID "$DEVICE")
+
+if [ -z "$UUID" ]; then
+    echo "Ошибка: Не удалось определить UUID для $DEVICE" >> /var/log/music-player.log
+    exit 1
 fi
 
+STATE_FILE="$STATE_DIR/$UUID"
+
+# Функция для работы mpc от имени пользователя mabel (чтобы не было проблем с правами)
+run_mpc() {
+    sudo -u mabel MPD_HOST=127.0.0.1 MPD_PORT=6600 /usr/bin/mpc "$@"
+}
+
+case "$1" in
+    start)
+        echo "Монтирование флешки $UUID..."
+        # Монтируем устройство (автоматически определяя файловую систему)
+        mount "$DEVICE" "$MOUNT_POINT" || exit 1
+        
+        # Даем MPD команду обновить базу данных, чтобы он увидел новые файлы
+        run_mpc update
+        run_mpc clear
+
+        if [ -f "$MOUNT_POINT/autoplay.m3u" ]; then
+            run_mpc random off
+            
+            # Читаем плейлист и добавляем треки
+            while read -r line || [ -n "$line" ]; do
+                # Пропускаем пустые строки и комментарии
+                [[ "$line" =~ ^# ]] && continue
+                [[ -z "$line" ]] && continue
+                run_mpc add "$line"
+            done < "$MOUNT_POINT/autoplay.m3u"
+
+            # Восстанавливаем позицию, если есть файл состояния
+            if [ -f "$STATE_FILE" ]; then
+                read -r TRACK TIME < "$STATE_FILE"
+                # Проверяем, что прочитаны числа, дабы избежать сбоев
+                if [[ "$TRACK" =~ ^[0-9]+$ ]] && [[ "$TIME" =~ ^[0-9]+$ ]]; then
+                    run_mpc play "$TRACK"
+                    run_mpc seek "$TIME"
+                else
+                    run_mpc play 1
+                fi
+            else
+                run_mpc play 1
+            fi
+        else
+            # Если autoplay.m3u нет — просто добавляем всё и включаем random
+            run_mpc listall | run_mpc add
+            run_mpc random on
+            run_mpc play
+        fi
+        ;;
+
+    stop)
+        echo "Сохранение состояния и размонтирование флешки $UUID..."
+        
+        # Получаем текущий трек и позицию перед остановкой
+        # mpc status выдает специфический формат, выдергиваем номер трека и секунды
+        CURRENT_STATUS=$(run_mpc status "%queuepos% %time%")
+        TRACK=$(echo "$CURRENT_STATUS" | awk '{print $1}')
+        # Переводим mm:ss в секунды, если нужно, или используем сырые секунды %elapsed%
+        ELAPSED=$(run_mpc status "%elapsed%")
+        
+        # Если плеер что-то играл, сохраняем это
+        if [ -n "$TRACK" ] && [ "$TRACK" != "0" ]; then
+            echo "$TRACK $ELAPSED" > "$STATE_FILE"
+        fi
+
+        # Останавливаем воспроизведение и очищаем очередь, чтобы MPD не держал файлы
+        run_mpc stop
+        run_mpc clear
+        
+        # Ленивое размонтирование (флешку уже могли выдернуть)
+        umount -l "$MOUNT_POINT"
+        ;;
+esac
