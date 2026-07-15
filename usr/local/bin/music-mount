@@ -19,7 +19,9 @@ STATE_FILE="$STATE_DIR/$UUID"
 
 # Функция для работы mpc от имени пользователя mabel (чтобы не было проблем с правами)
 run_mpc() {
-    sudo -u mabel MPD_HOST=127.0.0.1 MPD_PORT=6600 /usr/bin/mpc "$@"
+    # Динамически определяем имя пользователя с UID 1000
+    local target_user=$(id -nu 1000)
+    sudo -u "$target_user" MPD_HOST=127.0.0.1 MPD_PORT=6600 /usr/bin/mpc "$@"
 }
 
 # Функция для проверки, подключено ли хоть одно Bluetooth-аудиоустройство
