@@ -1,0 +1,24 @@
+#!/bin/bash
+
+MOUNT_POINT="/mnt/music"
+STATE_DIR="/var/lib/mpd/usb_states"
+UUID="`lsblk -f | egrep sd[a-z][0-9] | egrep -o '[A-Z0-9]{4}-[A-Z0-9]{4}`"
+
+UUID=$(blkid -o value -s UUID $DEVNAME)
+
+if [ -f "$MOUNT_POINT/autoplay.m3u" ]; then
+	/usr/bin/mpc random off
+	cat "$MOUNT_POINT/autoplay.m3u" | while read l; do /usr/bin/mpc add "$l"; done
+	if [ -f "$STATE_FILE" ]; then
+		read TRACK TIME < "$STATE_FILE"
+		/usr/bin/mpc play $TRACK
+		/usr/bin/mpc seek $TIME
+	# else
+	#	/usr/bin/mpc play
+	fi
+else
+	/usr/bin/mpc listall | /usr/bin/mpc add
+	/usr/bin/mpc random on
+	# /usr/bin/mpc play
+fi
+

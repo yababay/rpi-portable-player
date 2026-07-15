@@ -1,0 +1,13 @@
+[Unit]
+Description=Mount music USB and start playing
+After=systemd-udevd.service
+
+[Service]
+Type=oneshot
+ExecStartPre=/usr/bin/ip link set wlan0 down
+ExecStart=/usr/bin/mount /dev/music /mnt/music
+ExecStartPost=/usr/local/bin/music-mount
+
+[Install]
+WantedBy=multi-user.target
+

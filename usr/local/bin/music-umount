@@ -1,0 +1,15 @@
+#!/bin/bash
+
+UUID="`lsblk -f | egrep sd[a-z][0-9] | egrep -o '[A-Z0-9]{4}-[A-Z0-9]{4}`"
+MOUNT_POINT=/mnt/music
+STATE_DIR="/var/lib/mpd/usb_states"
+
+if [ -n "$UUID" ] && [ -f "$MOUNT_POINT/autoplay.m3u" ]; then
+	CURRENT_TRACK=$(/usr/bin/mpc status | grep -E "\[playing\]|\[paused\]" | awk '{print $2}' | cut -d/ -f1 | tr -d '#[]')
+	CURRENT_TIME=$(/usr/bin/mpc status | grep -E "\[playing\]|\[paused\]" | awk '{print $3}' | cut -d/ -f1 | awk -F: '{if(NF==3){print $1*3600+$2*60+$3}else{print $1*60+$2}}')
+	if [ -n "$CURRENT_TRACK" ] && [ -n "$CURRENT_TIME" ]; then
+		echo "$CURRENT_TRACK $CURRENT_TIME" > "$STATE_DIR/$UUID"
+	fi
+fi
+															
+

@@ -1,2 +1,0 @@
-KERNEL=="sd[a-z][0-9]", ACTION=="add",    SUBSYSTEM=="block", RUN+="/usr/bin/systemctl restart mnt-music.automount", SYMLINK+="music"
-KERNEL=="sd[a-z][0-9]", ACTION=="remove", SUBSYSTEM=="block", RUN+="/usr/bin/systemd-umount /mnt/music"
