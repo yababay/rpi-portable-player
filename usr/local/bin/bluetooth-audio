@@ -1,6 +1,7 @@
 #!/bin/bash
 
-MPC_CMD="sudo -u mabel MPD_HOST=127.0.0.1 MPD_PORT=6600 /usr/bin/mpc"
+TARGET_USER=$(id -nu 1000)
+MPC_CMD="sudo -u $TARGET_USER MPD_HOST=127.0.0.1 MPD_PORT=6600 /usr/bin/mpc"
 MOUNT_POINT="/mnt/music"
 
 # Слушаем СИСТЕМНУЮ шину (--system) конкретно на предмет изменений в устройствах Bluetooth
