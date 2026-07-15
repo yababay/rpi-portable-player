@@ -1,3 +1,38 @@
+PACKAGE_NAME=rpi-portable-player
+VERSION=1.0.0
+BUILD_DIR=build
+
+clean:
+	rm -rf $(BUILD_DIR) *.deb
+
+build_structure: clean
+	# Создаем структуру каталогов пакета
+	mkdir -p $(BUILD_DIR)/DEBIAN
+	mkdir -p $(BUILD_DIR)/etc/udev/rules.d
+	mkdir -p $(BUILD_DIR)/etc/systemd/system
+	mkdir -p $(BUILD_DIR)/usr/local/bin
+
+	# Копируем метаданные пакета
+	cp DEBIAN/control $(BUILD_DIR)/DEBIAN/
+	cp DEBIAN/postinst $(BUILD_DIR)/DEBIAN/
+	chmod +x $(BUILD_DIR)/DEBIAN/postinst
+
+	# Копируем системные конфиги и правила
+	cp etc/udev/rules.d/99-music.rules $(BUILD_DIR)/etc/udev/rules.d/
+	cp etc/systemd/system/music-mount.service $(BUILD_DIR)/etc/systemd/system/
+	cp etc/systemd/system/mpd-bluetooth-trigger.service $(BUILD_DIR)/etc/systemd/system/
+
+	# Копируем исполняемые скрипты
+	cp usr/local/bin/music-mount $(BUILD_DIR)/usr/local/bin/
+	cp usr/local/bin/mpd-bluetooth-trigger.sh $(BUILD_DIR)/usr/local/bin/
+	chmod +x $(BUILD_DIR)/usr/local/bin/music-mount
+	chmod +x $(BUILD_DIR)/usr/local/bin/mpd-bluetooth-trigger.sh
+
+package: build_structure
+	# Собираем дебиан-пакет
+	dpkg-deb --build $(BUILD_DIR) $(PACKAGE_NAME)_$(VERSION)_arm64.deb
+	echo "Пакет успешно собран!"
+
 reload:
 	sudo systemctl daemon-reload
 	sudo udevadm control --reload-rules
