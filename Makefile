@@ -10,25 +10,25 @@ build_structure: clean
 	mkdir -p $(BUILD_DIR)/DEBIAN
 	mkdir -p $(BUILD_DIR)/etc/udev/rules.d
 	mkdir -p $(BUILD_DIR)/etc/systemd/system
-	mkdir -p $(BUILD_DIR)/usr/local/bin
 	mkdir -p $(BUILD_DIR)/etc/wireplumber/wireplumber.conf.d
+	mkdir -p $(BUILD_DIR)/usr/local/bin
 
 	# Копируем метаданные пакета
 	cp DEBIAN/control $(BUILD_DIR)/DEBIAN/
 	cp DEBIAN/postinst $(BUILD_DIR)/DEBIAN/
 	chmod +x $(BUILD_DIR)/DEBIAN/postinst
 
-	# Копируем системные конфиги и правила
+	# Копируем системные конфиги, правила и настройки WirePlumber
 	cp etc/udev/rules.d/99-music.rules $(BUILD_DIR)/etc/udev/rules.d/
 	cp etc/systemd/system/music-mount.service $(BUILD_DIR)/etc/systemd/system/
-	cp etc/systemd/system/mpd-bluetooth-trigger.service $(BUILD_DIR)/etc/systemd/system/
+	cp etc/systemd/system/bluetooth-audio.service $(BUILD_DIR)/etc/systemd/system/
 	cp etc/wireplumber/wireplumber.conf.d/50-bluez-no-seat.conf $(BUILD_DIR)/etc/wireplumber/wireplumber.conf.d/
 
 	# Копируем исполняемые скрипты
 	cp usr/local/bin/music-mount $(BUILD_DIR)/usr/local/bin/
-	cp usr/local/bin/mpd-bluetooth-trigger.sh $(BUILD_DIR)/usr/local/bin/
+	cp usr/local/bin/bluetooth-audio $(BUILD_DIR)/usr/local/bin/
 	chmod +x $(BUILD_DIR)/usr/local/bin/music-mount
-	chmod +x $(BUILD_DIR)/usr/local/bin/mpd-bluetooth-trigger.sh
+	chmod +x $(BUILD_DIR)/usr/local/bin/bluetooth-audio
 
 package: build_structure
 	# Собираем дебиан-пакет
