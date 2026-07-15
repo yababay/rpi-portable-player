@@ -25,10 +25,14 @@ build_structure: clean
 	cp etc/wireplumber/wireplumber.conf.d/50-bluez-no-seat.conf $(BUILD_DIR)/etc/wireplumber/wireplumber.conf.d/
 
 	# Копируем исполняемые скрипты
-	cp usr/local/bin/music-mount $(BUILD_DIR)/usr/local/bin/
+	cp usr/local/bin/music-mount     $(BUILD_DIR)/usr/local/bin/
 	cp usr/local/bin/bluetooth-audio $(BUILD_DIR)/usr/local/bin/
+	cp usr/local/bin/gravity-daemon  $(BUILD_DIR)/usr/local/bin/
+	cp usr/local/bin/gravity-player  $(BUILD_DIR)/usr/local/bin/
 	chmod +x $(BUILD_DIR)/usr/local/bin/music-mount
 	chmod +x $(BUILD_DIR)/usr/local/bin/bluetooth-audio
+	chmod +x $(BUILD_DIR)/usr/local/bin/gravity-daemon
+	chmod +x $(BUILD_DIR)/usr/local/bin/gravity-player
 
 package: build_structure
 	# Собираем дебиан-пакет

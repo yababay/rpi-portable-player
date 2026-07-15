@@ -12,10 +12,10 @@ gpiomon --falling --rising $(gpiofind "GPIOAO_3") | while read -r line; do
     if [ "$CURRENT_STATE" != "$LAST_STATE" ]; then
         if [ "$CURRENT_STATE" -eq 1 ]; then
             # Цепь разомкнулась (шарик улетел) -> плеер перевернули
-            /usr/local/bin/player-gravity sleep
+            /usr/local/bin/gravity-player sleep
         else
             # Цепь замкнулась на GND -> плеер вернули на ноги
-            /usr/local/bin/player-gravity wake
+            /usr/local/bin/gravity-player wake
         fi
         LAST_STATE=$CURRENT_STATE
     fi
