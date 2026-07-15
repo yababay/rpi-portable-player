@@ -22,49 +22,91 @@ run_mpc() {
     sudo -u mabel MPD_HOST=127.0.0.1 MPD_PORT=6600 /usr/bin/mpc "$@"
 }
 
+# Функция для проверки, подключено ли хоть одно Bluetooth-аудиоустройство
+is_bluetooth_ready() {
+    # 1. Получаем список всех известных устройств
+    # 2. Оставляем только те, у которых тип "audio-headset" (или наушники/колонки)
+    # 3. Проверяем каждое активное устройство на флаг "Connected: yes"
+    
+    local connected_audio_found=0
+
+    while read -r mac _; do
+        if [ -n "$mac" ]; then
+            if bluetoothctl info "$mac" | grep -q "Connected: yes"; then
+                connected_audio_found=1
+                break
+            fi
+        fi
+    done < <(bluetoothctl devices | grep -E "audio-headset|headphone" | awk '{print $2}')
+
+    # Если цикл выше ничего не нашел (в Armbian icon может не распарситься),
+    # делаем фолбек — ищем вообще любое подключенное BT-устройство
+    if [ "$connected_audio_found" -eq 0 ]; then
+        if bluetoothctl info | grep -q "Connected: yes"; then
+            connected_audio_found=1
+        fi
+    fi
+
+    if [ "$connected_audio_found" -eq 1 ]; then
+        return 0 # Устройство подключено
+    else
+        return 1 # Никого нет
+    fi
+}
+
+# Функция для запуска воспроизведения с учетом сохраненного состояния
+start_playback() {
+    if [ -f "$STATE_FILE" ]; then
+        read -r TRACK TIME < "$STATE_FILE"
+        if [[ "$TRACK" =~ ^[0-9]+$ ]] && [[ "$TIME" =~ ^[0-9]+$ ]]; then
+            run_mpc play "$TRACK"
+            run_mpc seek "$TIME"
+        else
+            run_mpc play 1
+        fi
+    else
+        # Если плейлист autoplay, то play 1, иначе (для listall) просто play
+        if [ -f "$MOUNT_POINT/autoplay.m3u" ]; then
+            run_mpc play 1
+        else
+            run_mpc play
+        fi
+    fi
+}
+
 case "$1" in
     start)
         echo "Монтирование флешки $UUID..."
-        # Монтируем устройство (автоматически определяя файловую систему)
         mount "$DEVICE" "$MOUNT_POINT" || exit 1
         
-        # Даем MPD команду обновить базу данных, чтобы он увидел новые файлы
         run_mpc update
         run_mpc clear
 
+        # Заполнение очереди (autoplay.m3u или listall)
         if [ -f "$MOUNT_POINT/autoplay.m3u" ]; then
             run_mpc random off
-            
-            # Читаем плейлист и добавляем треки
             while read -r line || [ -n "$line" ]; do
-                # Пропускаем пустые строки и комментарии
                 [[ "$line" =~ ^# ]] && continue
                 [[ -z "$line" ]] && continue
                 run_mpc add "$line"
             done < "$MOUNT_POINT/autoplay.m3u"
-
-            # Восстанавливаем позицию, если есть файл состояния
-            if [ -f "$STATE_FILE" ]; then
-                read -r TRACK TIME < "$STATE_FILE"
-                # Проверяем, что прочитаны числа, дабы избежать сбоев
-                if [[ "$TRACK" =~ ^[0-9]+$ ]] && [[ "$TIME" =~ ^[0-9]+$ ]]; then
-                    run_mpc play "$TRACK"
-                    run_mpc seek "$TIME"
-                else
-                    run_mpc play 1
-                fi
-            else
-                run_mpc play 1
-            fi
         else
-            # Если autoplay.m3u нет — просто добавляем всё и включаем random
             run_mpc listall | run_mpc add
             run_mpc random on
-            run_mpc play
+        fi
+
+        # ИНТЕЛЛЕКТУАЛЬНЫЙ СТАРТ:
+        # Проверяем, подключено ли аудиоустройство прямо сейчас
+        if is_bluetooth_ready; then
+            echo "Bluetooth-аудио обнаружено. Включаю воспроизведение."
+            start_playback
+        else
+            echo "Флешка готова, но Bluetooth-устройства не найдены. Ожидаем подключения наушников..."
+            # Музыку не включаем. Очередь загружена, позиция будет прочитана, 
+            # когда сработает Bluetooth-триггер.
         fi
         ;;
-
-    stop)
+            stop)
         echo "Сохранение состояния и размонтирование флешки $UUID..."
         
         # Получаем текущий трек и позицию перед остановкой
