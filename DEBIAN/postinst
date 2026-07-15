@@ -1,19 +1,58 @@
 #!/bin/sh
 set -e
 
-echo "Настройка rpi-portable-player..."
+# 1. Автоматически находим имя пользователя с UID 1000 (первый юзер в системе)
+TARGET_USER=$(id -nu 1000 2>/dev/null || echo "")
 
-# Перезагружаем правила udev
+if [ -z "$TARGET_USER" ]; then
+    echo "Ошибка: В системе не найден пользователь с UID 1000!"
+    exit 1
+fi
+
+USER_HOME=$(getent passwd "$TARGET_USER" | cut -d: -f6)
+echo "Настройка плеера для пользователя: $TARGET_USER (Домашняя папка: $USER_HOME)"
+
+# 2. Включаем Linger, чтобы пользовательские сервисы (MPD, PW) стартовали без входа в GUI
+loginctl enable-linger "$TARGET_USER"
+
+# 3. Создаем структуру папок для MPD в пространстве пользователя
+MPD_CONFIG_DIR="$USER_HOME/.config/mpd"
+mkdir -p "$MPD_CONFIG_DIR"
+
+# 4. Генерируем mpd.conf прямо на лету с правильными путями
+cat << EOF > "$MPD_CONFIG_DIR/mpd.conf"
+music_directory         "/mnt/music"
+playlist_directory      "/mnt/music"
+db_file                 "$MPD_CONFIG_DIR/tag_cache"
+log_file                "$MPD_CONFIG_DIR/mpd.log"
+pid_file                "$MPD_CONFIG_DIR/pid"
+state_file              "$MPD_CONFIG_DIR/state"
+sticker_file            "$MPD_CONFIG_DIR/sticker.sql"
+
+audio_output {
+        type            "pipewire"
+        name            "PipeWire Bluetooth Output"
+        mixer_type      "software"
+}
+EOF
+
+# Корректируем права, чтобы владелец папки мог читать/писать конфиг
+chown -R "$TARGET_USER:$TARGET_USER" "$USER_HOME/.config"
+
+# 5. Перезагружаем udev и системный systemd
 udevadm control --reload-rules && udevadm trigger
-
-# Перезагружаем менеджер сервисов systemd
 systemctl daemon-reload
 
-# Включаем и запускаем наши триггеры
+# 6. Включаем и перезапускаем системные триггеры
 systemctl enable music-mount.service
-systemctl enable bluetooth-audio.service
-systemctl start bluetooth-audio.service
+systemctl enable mpd-bluetooth-trigger.service
+systemctl restart mpd-bluetooth-trigger.service
 
+# 7. Включаем и запускаем ПОЛЬЗОВАТЕЛЬСКИЕ сервисы от имени нашего юзера
+# Используем команду sudo -u для работы в контексте менеджера сервисов пользователя
+sudo -u "$TARGET_USER" DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus systemctl --user daemon-reload
+sudo -u "$TARGET_USER" DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus systemctl --user enable pipewire.service wireplumber.service mpd.service
+sudo -u "$TARGET_USER" DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus systemctl --user restart pipewire.service wireplumber.service mpd.service
 
-echo "Установка завершена успешно! Система готова к работе."
+echo "Установка rpi-portable-player успешно завершена!"
 exit 0
