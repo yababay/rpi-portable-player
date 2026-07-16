@@ -39,16 +39,15 @@ EOF
 # Корректируем права, чтобы владелец папки мог читать/писать конфиг
 chown -R "$TARGET_USER:$TARGET_USER" "$USER_HOME/.config"
 
-# 5. Перезагружаем udev и системный systemd
+# 5. Перезагружаем udev и systemd, чтобы применились новые правила и сервисы
 udevadm control --reload-rules && udevadm trigger
 systemctl daemon-reload
 
-# 6. Включаем и перезапускаем системные триггеры
-systemctl enable  music-mount.service
-systemctl enable  music-umount.service
-systemctl enable  bluetooth-audio.service
+# 6. Включаем и запускаем только ПОСТОЯННЫЕ системные триггеры
+systemctl enable bluetooth-audio.service
+systemctl enable gravity-daemon.service
+
 systemctl restart bluetooth-audio.service
-systemctl enable  gravity-daemon.service
 systemctl restart gravity-daemon.service
 
 # 7. Включаем и запускаем ПОЛЬЗОВАТЕЛЬСКИЕ сервисы от имени нашего юзера
