@@ -2,19 +2,18 @@
 
 # Глобальные настройки путей
 MOUNT_POINT="/mnt/music"
-STATE_DIR="/var/lib/mpd/usb_states"
 TARGET_USER=$(id -nu 1000 2>/dev/null || echo "mabel")
 USER_HOME=$(getent passwd "$TARGET_USER" | cut -d: -f6)
+MPD_CONFIG_DIR="$USER_HOME/.config/mpd"
 
 # Функция для динамического перестроения mpd.conf под конкретную флешку
 update_mpd_config() {
     local uuid="$1"
-    local mpd_config_dir="$USER_HOME/.config/mpd"
-    local db_file_path="$mpd_config_dir/tag_cache" # дефолт
+    local db_file_path="$MPD_CONFIG_DIR/tag_cache" # дефолт
 
-    # Если UUID передан, используем выделенную базу данных в STATE_DIR
+    # Если UUID передан, используем выделенную базу данных
     if [ -n "$uuid" ]; then
-        db_file_path="$STATE_DIR/db_$uuid"
+        db_file_path="$MPD_CONFIG_DIR/$uuid/tag_cache"
         # Создаем пустой файл базы, если флешка новая, чтобы у MPD были права
         touch "$db_file_path"
         chown "$TARGET_USER:$TARGET_USER" "$db_file_path"
@@ -66,11 +65,11 @@ is_bluetooth_ready() {
 }
 
 start_playback() {
-    local device="/dev/music"
+    local device=$(mount | grep "/mnt/music" | egrep -o "^\/dev\/[a-z0-9]+")
     local uuid=$(/sbin/blkid -o value -s UUID "$device" 2>/dev/null)
-    local state_file="$STATE_DIR/$uuid"
+    local state_file="$MPD_CONFIG_DIR/$uuid/state"
 
-    if [ -n "$uuid" ] && [ -f "$state_file" ]; then
+    if [ -f "$state_file" ]; then
         read -r TRACK TIME < "$state_file"
         if [[ "$TRACK" =~ ^[0-9]+$ ]] && [[ "$TIME" =~ ^[0-9]+$ ]]; then
             echo "Восстановление позиции: Трек $TRACK, Время $TIME"
@@ -80,6 +79,13 @@ start_playback() {
             run_mpc play 1
         fi
     else
-        [ -f "$MOUNT_POINT/autoplay.m3u" ] && run_mpc play 1 || run_mpc play
+        if [ -f "$MOUNT_POINT/autoplay.m3u" ]; then
+            run_mpc load autoplay
+        else 
+            run_mpc listall | run_mpc add
+            run_mpc shuffle
+        fi
     fi
+    run_mpc repeat on
+    run_mpc play
 }
