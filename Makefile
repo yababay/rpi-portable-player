@@ -66,8 +66,10 @@ git:
 	git push origin main
 
 pull:
+	sudo ip link set wlan0 up
 	git pull origin main
 
 push:
+	sudo ip link set wlan0 up
 	git push origin main
 
