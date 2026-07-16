@@ -1,2 +1,2 @@
-ACTION=="add",    SUBSYSTEM=="block", KERNEL=="sd[a-z][0-9]", SYMLINK+="music", TAG+="systemd", ENV{SYSTEMD_WANTS}="music-mount.service"
+ACTION=="add",    SUBSYSTEM=="block", KERNEL=="sd[a-z][0-9]", SYMLINK+="music", TAG+="systemd", ENV{SYSTEMD_WANTS}="mnt-music.mount"
 # ACTION=="remove", SUBSYSTEM=="block", KERNEL=="sd[a-z][0-9]", TAG+="systemd", ENV{SYSTEMD_WANTS}="music-unmount.service"
