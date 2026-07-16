@@ -9,17 +9,17 @@ case "$1" in
         update_mpd_config
 
         # Проверяем датчик наклона
-        GRAVITY_STATE=$(get_gravity_state)
-        if [ "$GRAVITY_STATE" = "active" ]; then
-            echo "Плеер перевернут (режим сна). Ожидаем пробуждения."
-        else
-            if is_bluetooth_ready; then
-                echo "Наушники на связи. Запуск музыки..."
-                start_playback
-            else
-                echo "Наушники не найдены. Ожидание подключения..."
-            fi
-        fi
+        #GRAVITY_STATE=$(get_gravity_state)
+        #if [ "$GRAVITY_STATE" = "active" ]; then
+        #    echo "Плеер перевернут (режим сна). Ожидаем пробуждения."
+        #else
+        #    if is_bluetooth_ready; then
+        #        echo "Наушники на связи. Запуск музыки..."
+        #        start_playback
+        #    else
+        #        echo "Наушники не найдены. Ожидание подключения..."
+        #    fi
+        #fi
         ;;
 
     stop)
