@@ -1,5 +1,5 @@
 PACKAGE_NAME=rpi-portable-player
-VERSION=1.0.0
+VERSION=1.0.1
 BUILD_DIR=build
 
 clean:
@@ -22,6 +22,7 @@ build_structure: clean
 	cp etc/udev/rules.d/99-music.rules $(BUILD_DIR)/etc/udev/rules.d/
 	cp etc/systemd/system/music-mount.service $(BUILD_DIR)/etc/systemd/system/
 	cp etc/systemd/system/bluetooth-audio.service $(BUILD_DIR)/etc/systemd/system/
+	cp etc/systemd/system/gravity-daemon.service $(BUILD_DIR)/etc/systemd/system/
 	cp etc/wireplumber/wireplumber.conf.d/50-bluez-no-seat.conf $(BUILD_DIR)/etc/wireplumber/wireplumber.conf.d/
 
 	# Копируем исполняемые скрипты
@@ -38,6 +39,11 @@ package: build_structure
 	# Собираем дебиан-пакет
 	dpkg-deb --build $(BUILD_DIR) $(PACKAGE_NAME)_$(VERSION)_arm64.deb
 	echo "Пакет успешно собран!"
+
+install:
+	sudo dpkg -i ./$(PACKAGE_NAME)_$(VERSION)_arm64.deb
+
+all: package install
 
 reload:
 	sudo systemctl daemon-reload
