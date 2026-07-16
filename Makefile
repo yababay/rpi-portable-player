@@ -1,5 +1,5 @@
 PACKAGE_NAME=rpi-portable-player
-VERSION=1.0.13
+VERSION=1.0.14
 BUILD_DIR=build
 
 # Объявляем все цели как псевдоцели, чтобы избежать конфликтов с именами файлов
