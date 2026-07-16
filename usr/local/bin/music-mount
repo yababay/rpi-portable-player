@@ -78,41 +78,46 @@ start_playback() {
 
 case "$1" in
     start)
-        echo "Монтирование флешки $UUID..."
-        # [НОВОЕ] Отключаем Wi-Fi для устранения наводок на Bluetooth и снижения энергопотребления
-	#         echo "Отключение Wi-Fi интерфейса..."
-	ip link set wlan0 down 2>/dev/null || true
+        # Проверяем, примонтирована ли уже папка. Если нет — монтируем.
+        if ! mountpoint -q "$MOUNT_POINT"; then
+            echo "Монтирование флешки $UUID..."
+            mount "$DEVICE" "$MOUNT_POINT" || exit 1
+            
+            # Команды обновления базы нужны ТОЛЬКО при первом физическом подключении флешки
+            run_mpc update
+            run_mpc clear
 
-        mount "$DEVICE" "$MOUNT_POINT" || exit 1
-        
-        run_mpc update
-        run_mpc clear
-
-        # Заполнение очереди (autoplay.m3u или listall)
-        if [ -f "$MOUNT_POINT/autoplay.m3u" ]; then
-            run_mpc random off
-            while read -r line || [ -n "$line" ]; do
-                [[ "$line" =~ ^# ]] && continue
-                [[ -z "$line" ]] && continue
-                run_mpc add "$line"
-            done < "$MOUNT_POINT/autoplay.m3u"
+            # Заполнение очереди (autoplay.m3u или listall)
+            if [ -f "$MOUNT_POINT/autoplay.m3u" ]; then
+                run_mpc random off
+                while read -r line || [ -n "$line" ]; do
+                    [[ "$line" =~ ^# ]] && continue
+                    [[ -z "$line" ]] && continue
+                    run_mpc add "$line"
+                done < "$MOUNT_POINT/autoplay.m3u"
+            else
+                run_mpc listall | run_mpc add
+                run_mpc random on
+            fi
         else
-            run_mpc listall | run_mpc add
-            run_mpc random on
+            echo "Флешка уже примонтирована, пропускаем шаг mount."
         fi
+        
+        # ЭТИ КОМАНДЫ ДОЛЖНЫ ВЫПОЛНЯТЬСЯ ВСЕГДА (и при первом старте, и при просыпании по датчику):
+        
+        # Жестко тушим Wi-Fi
+        echo "Отключение Wi-Fi интерфейса..."
+        ip link set wlan0 down 2>/dev/null || true
 
-        # ИНТЕЛЛЕКТУАЛЬНЫЙ СТАРТ:
-        # Проверяем, подключено ли аудиоустройство прямо сейчас
+        # Запускаем воспроизведение
         if is_bluetooth_ready; then
             echo "Bluetooth-аудио обнаружено. Включаю воспроизведение."
             start_playback
         else
-            echo "Флешка готова, но Bluetooth-устройства не найдены. Ожидаем подключения наушников..."
-            # Музыку не включаем. Очередь загружена, позиция будет прочитана, 
-            # когда сработает Bluetooth-триггер.
+            echo "Флешка готова, но Bluetooth-устройства не найдены. Ожидаем подключения..."
         fi
         ;;
-            stop)
+   stop)
         echo "Сохранение состояния и размонтирование флешки $UUID..."
         
         # Получаем текущий трек и позицию перед остановкой
