@@ -66,3 +66,6 @@ git:
 pull:
 	git pull origin main
 
+push:
+	git push origin main
+
