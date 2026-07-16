@@ -1,0 +1,9 @@
+[Unit]
+Description=Unmount USB Music Drive and Save State
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/music-mount stop
+
+[Install]
+WantedBy=multi-user.target
