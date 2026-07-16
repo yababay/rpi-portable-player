@@ -3,53 +3,11 @@
 # Подключаем общую библиотеку функций
 source /usr/local/bin/player-functions
 
-#DEVICE="/dev/music"
-#UUID=$(/sbin/blkid -o value -s UUID "$DEVICE")
-#
-#if [ -z "$UUID" ]; then
-#    echo "Ошибка: Не удалось определить UUID для $DEVICE" >> /var/log/music-player.log
-#    exit 1
-#fi
-#
 case "$1" in
     start)
-
+        # Перезапускаем сервер
         restart_user_mpd
 
-        # [НАДЕЖНО] Проверяем по системному логу ядра, примонтировано ли наше устройство /dev/music
-        #if ! grep -q " $MOUNT_POINT " /proc/mounts; then
-        #    echo "Монтирование флешки $UUID в $MOUNT_POINT..."
-        #    
-        #    # Если в fstab уже есть запись, mount $MOUNT_POINT отработает идеально.
-        #    # Если записи нет, сработает mount $DEVICE $MOUNT_POINT.
-        #    mount "$MOUNT_POINT" 2>/dev/null || mount "$DEVICE" "$MOUNT_POINT" || exit 1
-        #    
-        #    # Обновляем базу данных MPD только при первом физическом монтировании
-        #    run_mpc update || true
-        #
-        #    # Заполнение очереди
-        #    run_mpc clear
-        #    if [ -f "$MOUNT_POINT/autoplay.m3u" ]; then
-        #        run_mpc random off
-        #        while read -r line || [ -n "$line" ]; do
-        #            [[ "$line" =~ ^# ]] && continue
-        #            [[ -z "$line" ]] && continue
-        #            run_mpc add "$line"
-        #        done < "$MOUNT_POINT/autoplay.m3u"
-        #    else
-        #        # [НАДЕЖНО] Вместо listall просто добавляем корень точки монтирования.
-        #        # MPD мгновенно забьет очередь путями, и музыка начнет играть сразу!
-        #        run_mpc add "/"
-        #        run_mpc random on
-        #    fi        
-        #else
-        #    echo "Устройство уже физически примонтировано в $MOUNT_POINT, пропускаем шаг mount."
-        #fi
-        #
-        # Отключение Wi-Fi интерфейса для чистоты звука
-        # echo "Отключение Wi-Fi интерфейса..."
-        # ip link set wlan0 down 2>/dev/null || true
-        #
         # Проверяем датчик наклона
         #GRAVITY_STATE=$(gpioget -c "gpiochip1" 3 | cut -d'=' -f2 | tr -d '"')
         #if [ "$GRAVITY_STATE" = "active" ]; then
