@@ -78,43 +78,38 @@ start_playback() {
 
 case "$1" in
     start)
-        # Проверяем, примонтирована ли уже папка. Если нет — монтируем.
-        if ! mountpoint -q "$MOUNT_POINT"; then
-            echo "Монтирование флешки $UUID..."
-            mount "$DEVICE" "$MOUNT_POINT" || exit 1
-            
-            # Команды обновления базы нужны ТОЛЬКО при первом физическом подключении флешки
-            run_mpc update
-            run_mpc clear
-
-            # Заполнение очереди (autoplay.m3u или listall)
-            if [ -f "$MOUNT_POINT/autoplay.m3u" ]; then
-                run_mpc random off
-                while read -r line || [ -n "$line" ]; do
-                    [[ "$line" =~ ^# ]] && continue
-                    [[ -z "$line" ]] && continue
-                    run_mpc add "$line"
-                done < "$MOUNT_POINT/autoplay.m3u"
-            else
-                run_mpc listall | run_mpc add
-                run_mpc random on
-            fi
-        else
-            echo "Флешка уже примонтирована, пропускаем шаг mount."
-        fi
+        echo "Монтирование флешки $UUID..."
+        mount "$DEVICE" "$MOUNT_POINT" || exit 1
         
-        # ЭТИ КОМАНДЫ ДОЛЖНЫ ВЫПОЛНЯТЬСЯ ВСЕГДА (и при первом старте, и при просыпании по датчику):
-        
-        # Жестко тушим Wi-Fi
-        echo "Отключение Wi-Fi интерфейса..."
+        # Отключаем Wi-Fi при первом подключении флешки
         ip link set wlan0 down 2>/dev/null || true
 
-        # Запускаем воспроизведение
-        if is_bluetooth_ready; then
-            echo "Bluetooth-аудио обнаружено. Включаю воспроизведение."
-            start_playback
+        run_mpc update
+        run_mpc clear
+
+        if [ -f "$MOUNT_POINT/autoplay.m3u" ]; then
+            run_mpc random off
+            while read -r line || [ -n "$line" ]; do
+                [[ "$line" =~ ^# ]] && continue
+                [[ -z "$line" ]] && continue
+                run_mpc add "$line"
+            done < "$MOUNT_POINT/autoplay.m3u"
+
+            if [ -f "$STATE_FILE" ]; then
+                read -r TRACK TIME < "$STATE_FILE"
+                if [[ "$TRACK" =~ ^[0-9]+$ ]] && [[ "$TIME" =~ ^[0-9]+$ ]]; then
+                    run_mpc play "$TRACK"
+                    run_mpc seek "$TIME"
+                else
+                    run_mpc play 1
+                fi
+            else
+                run_mpc play 1
+            fi
         else
-            echo "Флешка готова, но Bluetooth-устройства не найдены. Ожидаем подключения..."
+            run_mpc listall | run_mpc add
+            run_mpc random on
+            run_mpc play
         fi
         ;;
    stop)
