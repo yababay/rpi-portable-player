@@ -13,32 +13,32 @@ fi
 
 case "$1" in
     start)
-        # 1. БЕЗУСЛОВНОЕ МОНТИРОВАНИЕ
-        if ! mountpoint -q "$MOUNT_POINT"; then
+        # [НАДЕЖНО] Проверяем по системному логу ядра, примонтировано ли наше устройство /dev/music
+        if ! grep -q " $MOUNT_POINT " /proc/mounts; then
             echo "Монтирование флешки $UUID в $MOUNT_POINT..."
-            mount "$DEVICE" "$MOUNT_POINT" || exit 1
-        fi
-        
-        # 2. СБРОС MPD ПРИ СМЕНЕ НАКОПИТЕЛЯ
-        if ! run_mpc clear >/dev/null 2>&1; then
-            restart_user_mpd
+            
+            # Если в fstab уже есть запись, mount $MOUNT_POINT отработает идеально.
+            # Если записи нет, сработает mount $DEVICE $MOUNT_POINT.
+            mount "$MOUNT_POINT" 2>/dev/null || mount "$DEVICE" "$MOUNT_POINT" || exit 1
+            
+            # Обновляем базу данных MPD только при первом физическом монтировании
+            run_mpc update --wait
             run_mpc clear
-        fi
 
-        # 3. ОБНОВЛЕНИЕ БАЗЫ ДАННЫХ С ОЖИДАНИЕМ
-        run_mpc update --wait || true
-
-        # Заполнение очереди (autoplay.m3u или сканирование каталога)
-        if [ -f "$MOUNT_POINT/autoplay.m3u" ]; then
-            run_mpc random off
-            while read -r line || [ -n "$line" ]; do
-                [[ "$line" =~ ^# ]] && continue
-                [[ -z "$line" ]] && continue
-                run_mpc add "$line"
-            done < "$MOUNT_POINT/autoplay.m3u"
+            # Заполнение очереди (autoplay.m3u или сканирование каталога)
+            if [ -f "$MOUNT_POINT/autoplay.m3u" ]; then
+                run_mpc random off
+                while read -r line || [ -n "$line" ]; do
+                    [[ "$line" =~ ^# ]] && continue
+                    [[ -z "$line" ]] && continue
+                    run_mpc add "$line"
+                done < "$MOUNT_POINT/autoplay.m3u"
+            else
+                run_mpc listall | run_mpc add
+                run_mpc random on
+            fi
         else
-            run_mpc listall | run_mpc add
-            run_mpc random on
+            echo "Устройство уже физически примонтировано в $MOUNT_POINT, пропускаем шаг mount."
         fi
         
         # Отключение Wi-Fi интерфейса для чистоты звука
