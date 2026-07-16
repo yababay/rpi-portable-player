@@ -19,22 +19,39 @@ case "$1" in
         # 1. Возвращаем процессору режим автоматической частоты
         echo "ondemand" | tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor > /dev/null
         
-        # 2. Динамически находим MAC-адрес сопряженных и доверенных (trusted) наушников.
-        # В вашем случае это будет 5C:FB:7C:E0:FC:56 (JBL T450BT).
-        # Берем первое доступное аудио-устройство из списка спаренных.
+        # Функция для mpc (копируем её из начала скрипта или пишем локально для этого блока)
+        run_mpc() {
+            local target_user=$(id -nu 1000)
+            sudo -u "$target_user" MPD_HOST=127.0.0.1 MPD_PORT=6600 /usr/bin/mpc "$@"
+        }
+
+        # 2. Динамически находим MAC-адрес наушников
         BT_MAC=$(bluetoothctl devices | grep -E "JBL|audio-headset|headphone" | head -n 1 | awk '{print $2}')
-        
-        # Если регулярное выражение выше ничего не нашло, берем просто любое спаренное устройство
         if [ -z "$BT_MAC" ]; then
             BT_MAC=$(bluetoothctl paired-devices | head -n 1 | awk '{print $2}')
         fi
 
         if [ -n "$BT_MAC" ]; then
             echo "Инициируем обратное подключение к наушникам: $BT_MAC..."
-            # Запускаем подключение в фоне, чтобы скрипт не завис, если наушники выключены
-            bluetoothctl connect "$BT_MAC" &
+            
+            # Запускаем процесс подключения и старта музыки асинхронно в фоне (&),
+            # чтобы опрос датчика в gravity-daemon не застревал на время ожидания Bluetooth
+            (
+                bluetoothctl connect "$BT_MAC" >/dev/null 2>&1
+                
+                # Ждем 2.5 секунды, чтобы WirePlumber успел создать аудио-профиль A2DP после коннекта
+                sleep 2.5
+                
+                # Проверяем, успешность подключения. Если наушники на связи — включаем музыку!
+                if bluetoothctl info "$BT_MAC" | grep -q "Connected: yes"; then
+                    echo "Наушники успешно подключены. Включаю воспроизведение." | logger -t gravity-player
+                    run_mpc play
+                else
+                    echo "Не удалось восстановить связь с наушниками автоматически." | logger -t gravity-player
+                fi
+            ) &
         else
-            echo "Предупреждение: Не удалось найти сопряженные Bluetooth-устройства для подключения."
+            echo "Предупреждение: Не удалось найти сопряженные Bluetooth-устройства."
         fi
         ;;
 esac
