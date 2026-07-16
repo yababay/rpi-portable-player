@@ -22,3 +22,31 @@ systemctl --user restart pipewire.service
 systemctl --user restart wireplumber.service
 systemctl --user restart mpd.service
 ```
+find . -path ./.git -prune -o -type f -print
+./DEBIAN/control
+./DEBIAN/postinst
+./rpi-portable-player_1.0.10_arm64.deb
+./LICENSE
+./usr/local/bin/bluetooth-audio
+./usr/local/bin/gravity-player
+./usr/local/bin/music-mount
+./usr/local/bin/gravity-daemon
+./README.md
+./etc/wireplumber/wireplumber.conf.d/50-bluez-no-seat.conf
+./etc/udev/rules.d/99-music.rules
+./etc/systemd/system/music-mount.service
+./etc/systemd/system/bluetooth-audio.service
+./etc/systemd/system/gravity-daemon.service
+./etc/mpd.conf
+./Makefile
+./build/DEBIAN/control
+./build/DEBIAN/postinst
+./build/usr/local/bin/gravity-player
+./build/usr/local/bin/music-mount
+./build/usr/local/bin/gravity-daemon
+./build/etc/wireplumber/wireplumber.conf.d/50-bluez-no-seat.conf
+./build/etc/udev/rules.d/99-music.rules
+./build/etc/systemd/system/music-mount.service
+./build/etc/systemd/system/bluetooth-audio.service
+./build/etc/systemd/system/gravity-daemon.service
+./.gitignore
