@@ -22,10 +22,10 @@ case "$1" in
             mount "$MOUNT_POINT" 2>/dev/null || mount "$DEVICE" "$MOUNT_POINT" || exit 1
             
             # Обновляем базу данных MPD только при первом физическом монтировании
-            run_mpc update --wait
-            run_mpc clear
+            run_mpc update || true
 
-            # Заполнение очереди (autoplay.m3u или сканирование каталога)
+            # Заполнение очереди
+            run_mpc clear
             if [ -f "$MOUNT_POINT/autoplay.m3u" ]; then
                 run_mpc random off
                 while read -r line || [ -n "$line" ]; do
@@ -34,9 +34,11 @@ case "$1" in
                     run_mpc add "$line"
                 done < "$MOUNT_POINT/autoplay.m3u"
             else
-                run_mpc listall | run_mpc add
+                # [НАДЕЖНО] Вместо listall просто добавляем корень точки монтирования.
+                # MPD мгновенно забьет очередь путями, и музыка начнет играть сразу!
+                run_mpc add "/"
                 run_mpc random on
-            fi
+            fi        
         else
             echo "Устройство уже физически примонтировано в $MOUNT_POINT, пропускаем шаг mount."
         fi
@@ -79,7 +81,7 @@ case "$1" in
 
         # Жесткий сброс MPD, чтобы стереть из его памяти "призрачные треки"
         restart_user_mpd
-        run_mpc update --wait >/dev/null 2>&1 || true
+        run_mpc update || true >/dev/null 2>&1 || true
 
         # Возвращаем Wi-Fi для удаленного доступа
         echo "Включение Wi-Fi интерфейса..."
