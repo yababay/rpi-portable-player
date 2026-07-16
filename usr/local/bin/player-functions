@@ -6,6 +6,16 @@ TARGET_USER=$(id -nu 1000 2>/dev/null || echo "mabel")
 USER_HOME=$(getent passwd "$TARGET_USER" | cut -d: -f6)
 MPD_CONFIG_DIR="$USER_HOME/.config/mpd"
 
+run_mpc() {
+    sudo -u "$TARGET_USER" MPD_HOST=127.0.0.1 MPD_PORT=6600 /usr/bin/mpc "$@"
+}
+
+restart_user_mpd() {
+    echo "Перезапуск пользовательского MPD..."
+    sudo -u "$TARGET_USER" DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus systemctl --user restart mpd.service
+    sleep 0.8
+}
+
 # Функция для динамического перестроения mpd.conf под конкретную флешку
 update_mpd_config() {
     local uuid="$1"
@@ -35,16 +45,8 @@ audio_output {
 }
 EOF
     chown "$TARGET_USER:$TARGET_USER" "$mpd_config_dir/mpd.conf"
-}
-
-run_mpc() {
-    sudo -u "$TARGET_USER" MPD_HOST=127.0.0.1 MPD_PORT=6600 /usr/bin/mpc "$@"
-}
-
-restart_user_mpd() {
-    echo "Перезапуск пользовательского MPD..."
-    sudo -u "$TARGET_USER" DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus systemctl --user restart mpd.service
-    sleep 0.8
+    restart_user_mpd
+    run_mpc update
 }
 
 is_bluetooth_ready() {
