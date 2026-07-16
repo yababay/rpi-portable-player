@@ -4,23 +4,52 @@
 MOUNT_POINT="/mnt/music"
 STATE_DIR="/var/lib/mpd/usb_states"
 TARGET_USER=$(id -nu 1000 2>/dev/null || echo "mabel")
+USER_HOME=$(getent passwd "$TARGET_USER" | cut -d: -f6)
 
-# Функция для работы mpc от имени пользователя с UID 1000
+# Функция для динамического перестроения mpd.conf под конкретную флешку
+update_mpd_config() {
+    local uuid="$1"
+    local mpd_config_dir="$USER_HOME/.config/mpd"
+    local db_file_path="$mpd_config_dir/tag_cache" # дефолт
+
+    # Если UUID передан, используем выделенную базу данных в STATE_DIR
+    if [ -n "$uuid" ]; then
+        db_file_path="$STATE_DIR/db_$uuid"
+        # Создаем пустой файл базы, если флешка новая, чтобы у MPD были права
+        touch "$db_file_path"
+        chown "$TARGET_USER:$TARGET_USER" "$db_file_path"
+    fi
+
+    cat << EOF > "$mpd_config_dir/mpd.conf"
+music_directory         "$MOUNT_POINT"
+playlist_directory      "$MOUNT_POINT"
+db_file                 "$db_file_path"
+log_file                "$mpd_config_dir/mpd.log"
+pid_file                "$mpd_config_dir/pid"
+state_file              "$mpd_config_dir/state"
+sticker_file            "$mpd_config_dir/sticker.sql"
+
+audio_output {
+        type            "pipewire"
+        name            "PipeWire Bluetooth Output"
+        mixer_type      "software"
+}
+EOF
+    chown "$TARGET_USER:$TARGET_USER" "$mpd_config_dir/mpd.conf"
+}
+
 run_mpc() {
     sudo -u "$TARGET_USER" MPD_HOST=127.0.0.1 MPD_PORT=6600 /usr/bin/mpc "$@"
 }
 
-# Функция для жесткой реанимации MPD, если его декодер заклинило
 restart_user_mpd() {
-    echo "Реанимация пользовательского MPD..."
+    echo "Перезапуск пользовательского MPD..."
     sudo -u "$TARGET_USER" DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus systemctl --user restart mpd.service
-    sleep 0.5
+    sleep 0.8
 }
 
-# Функция для проверки, подключено ли хоть одно Bluetooth-аудиоустройство
 is_bluetooth_ready() {
     local connected_audio_found=0
-
     while read -r mac _; do
         if [ -n "$mac" ]; then
             if bluetoothctl info "$mac" | grep -q "Connected: yes"; then
@@ -30,22 +59,13 @@ is_bluetooth_ready() {
         fi
     done < <(bluetoothctl devices | grep -E "JBL|audio-headset|headphone" | awk '{print $2}')
 
-    if [ "$connected_audio_found" -eq 0 ]; then
-        if bluetoothctl info | grep -q "Connected: yes"; then
-            connected_audio_found=1
-        fi
+    if [ "$connected_audio_found" -eq 0 ] && bluetoothctl info | grep -q "Connected: yes"; then
+        connected_audio_found=1
     fi
-
-    if [ "$connected_audio_found" -eq 1 ]; then
-        return 0
-    else
-        return 1
-    fi
+    [ "$connected_audio_found" -eq 1 ] && return 0 || return 1
 }
 
-# Централизованная функция запуска воспроизведения с учетом сохраненного состояния
 start_playback() {
-    # Считываем UUID текущей флешки, если она смонтирована
     local device="/dev/music"
     local uuid=$(/sbin/blkid -o value -s UUID "$device" 2>/dev/null)
     local state_file="$STATE_DIR/$uuid"
@@ -53,17 +73,13 @@ start_playback() {
     if [ -n "$uuid" ] && [ -f "$state_file" ]; then
         read -r TRACK TIME < "$state_file"
         if [[ "$TRACK" =~ ^[0-9]+$ ]] && [[ "$TIME" =~ ^[0-9]+$ ]]; then
-            echo "Восстановление сохраненной позиции: Трек $TRACK, Время $TIME"
+            echo "Восстановление позиции: Трек $TRACK, Время $TIME"
             run_mpc play "$TRACK"
             run_mpc seek "$TIME"
         else
             run_mpc play 1
         fi
     else
-        if [ -f "$MOUNT_POINT/autoplay.m3u" ]; then
-            run_mpc play 1
-        else
-            run_mpc play
-        fi
+        [ -f "$MOUNT_POINT/autoplay.m3u" ] && run_mpc play 1 || run_mpc play
     fi
 }
