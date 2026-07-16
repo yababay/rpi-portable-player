@@ -26,6 +26,10 @@ get_state_file () {
     echo "$MPD_CONFIG_DIR/$uuid/state"
 }
 
+get_gravity_state () {
+    gpioget -c "gpiochip1" 3 | cut -d'=' -f2 | tr -d '"'
+}
+
 # Функция для динамического перестроения mpd.conf под конкретную флешку
 update_mpd_config() {
     local uuid=$(get_uuid)
