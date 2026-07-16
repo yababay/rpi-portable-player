@@ -77,6 +77,7 @@ case "$1" in
             # Обновляем базу данных MPD только при первом монтировании флешки
             run_mpc update
             run_mpc clear
+            run_mpc repeat on
 
             # Заполнение очереди (autoplay.m3u или сканирование каталога)
             if [ -f "$MOUNT_POINT/autoplay.m3u" ]; then
