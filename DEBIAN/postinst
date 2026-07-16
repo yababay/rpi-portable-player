@@ -45,6 +45,7 @@ systemctl daemon-reload
 
 # 6. Включаем и перезапускаем системные триггеры
 systemctl enable  music-mount.service
+systemctl enable  music-umount.service
 systemctl enable  bluetooth-audio.service
 systemctl restart bluetooth-audio.service
 systemctl enable  gravity-daemon.service
