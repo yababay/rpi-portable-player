@@ -19,12 +19,6 @@ case "$1" in
         # 1. Возвращаем процессору режим автоматической частоты
         echo "ondemand" | tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor > /dev/null
         
-        # Функция для mpc (копируем её из начала скрипта или пишем локально для этого блока)
-        run_mpc() {
-            local target_user=$(id -nu 1000)
-            sudo -u "$target_user" MPD_HOST=127.0.0.1 MPD_PORT=6600 /usr/bin/mpc "$@"
-        }
-
         # 2. Динамически находим MAC-адрес наушников
         BT_MAC=$(bluetoothctl devices | grep -E "JBL|audio-headset|headphone" | head -n 1 | awk '{print $2}')
         if [ -z "$BT_MAC" ]; then
@@ -34,18 +28,20 @@ case "$1" in
         if [ -n "$BT_MAC" ]; then
             echo "Инициируем обратное подключение к наушникам: $BT_MAC..."
             
-            # Запускаем процесс подключения и старта музыки асинхронно в фоне (&),
-            # чтобы опрос датчика в gravity-daemon не застревал на время ожидания Bluetooth
+            # Уводим подключение и инициализацию в фоновый поток
             (
                 bluetoothctl connect "$BT_MAC" >/dev/null 2>&1
                 
-                # Ждем 2.5 секунды, чтобы WirePlumber успел создать аудио-профиль A2DP после коннекта
+                # Ждем 2.5 секунды, чтобы WirePlumber поднял профиль A2DP
                 sleep 2.5
                 
-                # Проверяем, успешность подключения. Если наушники на связи — включаем музыку!
+                # Проверяем, на связи ли наушники
                 if bluetoothctl info "$BT_MAC" | grep -q "Connected: yes"; then
-                    echo "Наушники успешно подключены. Включаю воспроизведение." | logger -t gravity-player
-                    run_mpc play
+                    echo "Наушники успешно подключены. Вызываем главный диспетчер music-mount..." | logger -t gravity-player
+                    
+                    # Передаем управление music-mount. Он проверит флешку, 
+                    # гарантированно погасит Wi-Fi и включит музыку с нужной секунды.
+                    /usr/local/bin/music-mount start
                 else
                     echo "Не удалось восстановить связь с наушниками автоматически." | logger -t gravity-player
                 fi
