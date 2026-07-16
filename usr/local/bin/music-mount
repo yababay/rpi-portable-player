@@ -6,7 +6,7 @@ source /usr/local/bin/player-functions
 case "$1" in
     start)
         # Перезапускаем сервер
-        restart_user_mpd
+        update_mpd_config
 
         # Проверяем датчик наклона
         GRAVITY_STATE=$(get_gravity_state)
