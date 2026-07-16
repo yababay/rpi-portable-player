@@ -1,10 +1,12 @@
 [Unit]
-Description=Mount USB Music Drive
-After=dev-music.device
+Description=При подключении флешки
+BindsTo=mnt-music.mount
+After=mnt-music.mount
 
 [Service]
-Type=oneshot
 ExecStart=/usr/local/bin/music-mount start
+Restart=on-failure
+RestartSec=2s
 
-# [Install]
-# WantedBy=multi-user.target
+[Install]
+WantedBy=mnt-music.mount
