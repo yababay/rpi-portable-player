@@ -1,52 +1,36 @@
-# Файлы для управления плеером
+# Система управления портативным плеером
+
+Плеер представляет собой портативное устройство без внешних органов управления. Остановка воспроизведения осуществляется переворачиванием плеера вверх дном. Смена музыкальной коллекции — физической заменой флешки. Плеер начинает проигрывать музыку когда соблюдаются два условия: 
+
+1. подключено bluetooth-аудиоустройство;
+2. вставлена флешка с музыкой.
+
+Успешно запущен на устройстве `radxa zero w`. Скорее всего, будет работать на других миниатюрных компьютерах типа `Raspberry Pi` с установленной ОС Debian 13 (Trixie).
 
 ## Конфигурация
 
-* `./etc/mpd.conf` — конфиг `mpd`, адаптированный для работы в пользовательском пространстве в паре с `pipewire`;
+* `./etc/mpd.conf` — конфиг `mpd`, адаптированный для работы в пользовательском пространстве в паре с `pipewire`; приведён для справки, формируется при установке пакета в пользовательском пространстве утилитой `DEBIAN/postinst`;
 * `./etc/wireplumber/wireplumber.conf.d/50-bluez-no-seat.conf` — конфиг `pipewire` для работы в «безголовом»
 
-## Управление флешкой
+## Системные сервисы
 
 * `./etc/udev/rules.d/99-music.rules` — реагирует на подключение / отключение флешки;
-* `./etc/systemd/system/music-umount.service` — срабатывает при подключении флешки: монтирует, вызывает скрипт;
-* `./etc/systemd/system/music-mount.service` — срабатывает при отключении флешки: размонтирует, вызывает скрипт;
-* `./usr/local/bin/music-umount` — управление плеером и аудиоустройствами при монтировании (восстановление композиции, включение звука, если одно из устройств готово);
-* `./usr/local/bin/music-mount` — управление плеером и аудиоустройствами при размонтировании (остановка плеера, запоминание композиции);
+* `./etc/systemd/system/music-mount.service` — срабатывает при подключении / отключении флешки: монтирует, размонтирует, запускает утилиту `music-mount`;
+* `./etc/systemd/system/bluetooth-audio.service` — управление аудиоустройствами; 
+* `./etc/systemd/system/gravity-daemon.service`— управление гравитационным датчиком.
 
-Перед началом работы нужно однократно выполнить `sudo loginctl enable-linger $USERNAME`, чтобы эмулировать присутствие пользователя в системе для `pipewire`. 
+## Утилиты
 
-Также нужно запустить аудиосервисы от имени пользователя:
+* `./usr/local/bin/music-mount` — управление плеером и аудиоустройствами (остановка плеера, запоминание композиции, проверка аудиоустройств);
+* `./usr/local/bin/bluetooth-audio` — поиск активных аудиоустройств; 
+* `./usr/local/bin/gravity-daemon` — обработка сигналов гравитационного датчика;
+* `./usr/local/bin/gravity-player` — «умная пауза», «умное пробуждение».
 
-```bash
-systemctl --user restart pipewire.service
-systemctl --user restart wireplumber.service
-systemctl --user restart mpd.service
-```
-find . -path ./.git -prune -o -type f -print
-./DEBIAN/control
-./DEBIAN/postinst
-./rpi-portable-player_1.0.10_arm64.deb
-./LICENSE
-./usr/local/bin/bluetooth-audio
-./usr/local/bin/gravity-player
-./usr/local/bin/music-mount
-./usr/local/bin/gravity-daemon
-./README.md
-./etc/wireplumber/wireplumber.conf.d/50-bluez-no-seat.conf
-./etc/udev/rules.d/99-music.rules
-./etc/systemd/system/music-mount.service
-./etc/systemd/system/bluetooth-audio.service
-./etc/systemd/system/gravity-daemon.service
-./etc/mpd.conf
-./Makefile
-./build/DEBIAN/control
-./build/DEBIAN/postinst
-./build/usr/local/bin/gravity-player
-./build/usr/local/bin/music-mount
-./build/usr/local/bin/gravity-daemon
-./build/etc/wireplumber/wireplumber.conf.d/50-bluez-no-seat.conf
-./build/etc/udev/rules.d/99-music.rules
-./build/etc/systemd/system/music-mount.service
-./build/etc/systemd/system/bluetooth-audio.service
-./build/etc/systemd/system/gravity-daemon.service
-./.gitignore
+## Сборка пакета
+
+* `./DEBIAN/control` — метаданные;
+* `./DEBIAN/postinst` — настройка сервисов и конфигураций; поскольку воспроизведение звука выполняется в пользовательском пространстве, необходимо перенести туда конфигурацию `mpd` и запустить там `pipewire` и сопутствующие сервисы.
+
+Для сборки и установки пакета следует запустить команду `make` в корне локального репозитория.
+
+Написано при поддержке ИИ Gemini.
