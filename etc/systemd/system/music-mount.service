@@ -4,6 +4,7 @@ BindsTo=mnt-music.mount
 After=mnt-music.mount
 
 [Service]
+ExecStartPre=/usr/bin/ip link set wlan0 down
 ExecStart=/usr/local/bin/music-mount start
 Restart=on-failure
 RestartSec=2s
