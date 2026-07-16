@@ -29,7 +29,7 @@ build_structure: clean
 	# Копируем системные конфиги, правила и настройки WirePlumber
 	cp etc/udev/rules.d/99-music.rules $(BUILD_DIR)/etc/udev/rules.d/
 	cp etc/systemd/system/music-mount.service $(BUILD_DIR)/etc/systemd/system/
-	cp etc/systemd/system/music-unmount.service $(BUILD_DIR)/etc/systemd/
+	cp etc/systemd/system/music-umount.service $(BUILD_DIR)/etc/systemd/
 	cp etc/systemd/system/bluetooth-audio.service $(BUILD_DIR)/etc/systemd/system/
 	cp etc/systemd/system/gravity-daemon.service $(BUILD_DIR)/etc/systemd/system/
 	cp etc/wireplumber/wireplumber.conf.d/50-bluez-no-seat.conf $(BUILD_DIR)/etc/wireplumber/wireplumber.conf.d/
