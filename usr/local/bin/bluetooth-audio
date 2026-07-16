@@ -1,32 +1,48 @@
 #!/bin/bash
 
-TARGET_USER=$(id -nu 1000)
-MPC_CMD="sudo -u $TARGET_USER MPD_HOST=127.0.0.1 MPD_PORT=6600 /usr/bin/mpc"
+# Подключаем общую библиотеку функций проекта
+source /usr/local/bin/player-functions
+
+# Ссылка на точку монтирования берется из библиотеки, но для надежности продублируем
 MOUNT_POINT="/mnt/music"
 
-# Слушаем СИСТЕМНУЮ шину (--system) конкретно на предмет изменений в устройствах Bluetooth
+# Непрерывно слушаем системный D-Bus от BlueZ
 dbus-monitor --system "type='signal',sender='org.bluez',interface='org.freedesktop.DBus.Properties',member='PropertiesChanged'" | while read -r line; do
     
-    # Если в потоке D-Bus промелькнуло событие подключения
+    # Если зафиксирован сигнал подключения устройства
     if echo "$line" | grep -q "Connected"; then
         
-        # Даем 1.5 секунды, чтобы WirePlumber гарантированно увидел устройство
+        # Выдерживаем паузу в 1.5 секунды для инициализации аудиовыхода в WirePlumber
         sleep 1.5
         
-        # Проверяем, подключено ли устройство на самом деле (защита от ложных сигналов отключения)
-        if bluetoothctl info | grep -q "Connected: yes"; then
+        # Проверяем, на связи ли наушники на самом деле (защита от ложного срабатывания на отключение)
+        if is_bluetooth_ready; then
             
-            # Шаг 1: Проверяем, примонтирована ли флешка (проверяем точку монтирования через mountpoint)
+            # Проверяем, вставлена ли флешка в берестяной тубус
             if mountpoint -q "$MOUNT_POINT"; then
-                echo "Наушники подключены, флешка на месте. Запускаем плеер."
                 
-                # Шаг 2: Проверяем статус MPD. Если он не играет — включаем музыку
-                CURRENT_STATUS=$($MPC_CMD status | grep -E "\[playing\]")
-                if [ -z "$CURRENT_STATUS" ]; then
-                    $MPC_CMD play
+                # Считываем положение гравитационного датчика (3-я линия на gpiochip1)
+                # Если плеер перевернут и "спит", то включать музыку от случайного коннекта наушников нельзя
+                GRAVITY_STATE=$(gpioget -c "gpiochip1" 3 | cut -d'=' -f2 | tr -d '"')
+                
+                if [ "$GRAVITY_STATE" = "active" ]; then
+                    echo "Наушники подключились, но плеер перевернут (спит). Воспроизведение заблокировано." | logger -t bluetooth-audio
+                else
+                    echo "Наушники подключены, флешка на месте, плеер стоит ровно. Запускаем плеер." | logger -t bluetooth-audio
+                    
+                    # Проверяем статус MPD. Если он не играет — включаем музыку умным способом
+                    CURRENT_STATUS=$(run_mpc status "%queuepos%" 2>/dev/null)
+                    if [ -z "$CURRENT_STATUS" ] || [ "$CURRENT_STATUS" = "0" ] || run_mpc status | grep -q "paused"; then
+                        
+                        # [НАДЕЖНО] Жестко гасим Wi-Fi интерфейс, чтобы убрать заикания звука
+                        ip link set wlan0 down 2>/dev/null || true
+                        
+                        # Вызываем интеллектуальный запуск из библиотеки (с подхватом секунд)
+                        start_playback
+                    fi
                 fi
             else
-                echo "Наушники подключены, но флешка не вставлена. Музыка не будет запущена."
+                echo "Наушники подключены, но флешка отсутствует. Музыка не будет запущена." | logger -t bluetooth-audio
             fi
         fi
     fi
