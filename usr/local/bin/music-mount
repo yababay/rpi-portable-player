@@ -1,9 +1,7 @@
 #!/bin/bash
 
-# Настройки путей
-MOUNT_POINT="/mnt/music"
-STATE_DIR="/var/lib/mpd/usb_states"
-mkdir -p "$STATE_DIR"
+# Подключаем общую библиотеку функций
+source /usr/local/bin/player-functions
 
 DEVICE="/dev/music"
 UUID=$(/sbin/blkid -o value -s UUID "$DEVICE")
@@ -13,106 +11,50 @@ if [ -z "$UUID" ]; then
     exit 1
 fi
 
-STATE_FILE="$STATE_DIR/$UUID"
-
-# Функция для работы mpc от имени пользователя с UID 1000
-run_mpc() {
-    local target_user=$(id -nu 1000)
-    sudo -u "$target_user" MPD_HOST=127.0.0.1 MPD_PORT=6600 /usr/bin/mpc "$@"
-}
-
-# Функция для проверки, подключено ли хоть одно Bluetooth-аудиоустройство
-is_bluetooth_ready() {
-    local connected_audio_found=0
-
-    while read -r mac _; do
-        if [ -n "$mac" ]; then
-            if bluetoothctl info "$mac" | grep -q "Connected: yes"; then
-                connected_audio_found=1
-                break
-            fi
-        fi
-    done < <(bluetoothctl devices | grep -E "JBL|audio-headset|headphone" | awk '{print $2}')
-
-    if [ "$connected_audio_found" -eq 0 ]; then
-        if bluetoothctl info | grep -q "Connected: yes"; then
-            connected_audio_found=1
-        fi
-    fi
-
-    if [ "$connected_audio_found" -eq 1 ]; then
-        return 0
-    else
-        return 1
-    fi
-}
-
-# Централизованная функция запуска воспроизведения с учетом сохраненного состояния
-start_playback() {
-    if [ -f "$STATE_FILE" ]; then
-        read -r TRACK TIME < "$STATE_FILE"
-        if [[ "$TRACK" =~ ^[0-9]+$ ]] && [[ "$TIME" =~ ^[0-9]+$ ]]; then
-            echo "Восстановление сохраненной позиции: Трек $TRACK, Время $TIME"
-            run_mpc play "$TRACK"
-            run_mpc seek "$TIME"
-        else
-            run_mpc play 1
-        fi
-    else
-        if [ -f "$MOUNT_POINT/autoplay.m3u" ]; then
-            run_mpc play 1
-        else
-            run_mpc play
-        fi
-    fi
-}
-
 case "$1" in
     start)
-        # Проверяем, примонтирована ли уже папка. Если нет — монтируем.
+        # 1. БЕЗУСЛОВНОЕ МОНТИРОВАНИЕ
         if ! mountpoint -q "$MOUNT_POINT"; then
             echo "Монтирование флешки $UUID в $MOUNT_POINT..."
             mount "$DEVICE" "$MOUNT_POINT" || exit 1
-            
-            # Обновляем базу данных MPD только при первом монтировании флешки
-            run_mpc update
-            run_mpc clear
-            run_mpc repeat on
-
-            # Заполнение очереди (autoplay.m3u или сканирование каталога)
-            if [ -f "$MOUNT_POINT/autoplay.m3u" ]; then
-                run_mpc random off
-                while read -r line || [ -n "$line" ]; do
-                    [[ "$line" =~ ^# ]] && continue
-                    [[ -z "$line" ]] && continue
-                    run_mpc add "$line"
-                done < "$MOUNT_POINT/autoplay.m3u"
-            else
-                run_mpc listall | run_mpc add
-                run_mpc random on
-            fi
-        else
-            echo "Флешка уже примонтирована, пропускаем шаг mount."
         fi
         
-        # Действия, которые должны выполняться ВСЕГДА при вызове блока start:
+        # 2. СБРОС MPD ПРИ СМЕНЕ НАКОПИТЕЛЯ
+        if ! run_mpc clear >/dev/null 2>&1; then
+            restart_user_mpd
+            run_mpc clear
+        fi
+
+        # 3. ОБНОВЛЕНИЕ БАЗЫ ДАННЫХ С ОЖИДАНИЕМ
+        run_mpc update --wait || true
+
+        # Заполнение очереди (autoplay.m3u или сканирование каталога)
+        if [ -f "$MOUNT_POINT/autoplay.m3u" ]; then
+            run_mpc random off
+            while read -r line || [ -n "$line" ]; do
+                [[ "$line" =~ ^# ]] && continue
+                [[ -z "$line" ]] && continue
+                run_mpc add "$line"
+            done < "$MOUNT_POINT/autoplay.m3u"
+        else
+            run_mpc listall | run_mpc add
+            run_mpc random on
+        fi
         
-        # Жестко отключаем Wi-Fi для защиты звукового потока от наводок
+        # Отключение Wi-Fi интерфейса для чистоты звука
         echo "Отключение Wi-Fi интерфейса..."
         ip link set wlan0 down 2>/dev/null || true
 
-        # Считываем состояние гравитационного датчика (3-я линия на gpiochip1)
+        # Проверяем датчик наклона
         GRAVITY_STATE=$(gpioget -c "gpiochip1" 3 | cut -d'=' -f2 | tr -d '"')
-
         if [ "$GRAVITY_STATE" = "active" ]; then
-            echo "Плеер находится в режиме сна (перевернут). Музыка подготовлена, но запуск отложен."
+            echo "Плеер перевернут (режим сна). Ожидаем пробуждения."
         else
-            # Если плеер стоит ровно, проверяем наушники и запускаем звук
             if is_bluetooth_ready; then
-                echo "Bluetooth-наушники обнаружены. Запуск воспроизведения..."
+                echo "Наушники на связи. Запуск музыки..."
                 start_playback
             else
-                echo "Флешка готова, но Bluetooth-устройства не найдены. Ожидаем подключения..."
+                echo "Наушники не найдены. Ожидание подключения..."
             fi
         fi
         ;;
@@ -120,23 +62,26 @@ case "$1" in
     stop)
         echo "Сохранение состояния и размонтирование флешки $UUID..."
         
-        # Выдергиваем текущую позицию перед извлечением
-        CURRENT_STATUS=$(run_mpc status "%queuepos%")
-        ELAPSED=$(run_mpc status "%elapsed%")
+        # Пробуем сохранить позицию. Если MPD заклинило — пишем лог и идем дальше
+        CURRENT_STATUS=$(run_mpc status "%queuepos%" 2>/dev/null)
+        ELAPSED=$(run_mpc status "%elapsed%" 2>/dev/null)
         
         if [ -n "$CURRENT_STATUS" ] && [ "$CURRENT_STATUS" != "0" ]; then
-            # Сохраняем позицию в файл, привязанный к UUID флешки
-            echo "$CURRENT_STATUS $ELAPSED" > "$STATE_FILE"
+            local state_file="$STATE_DIR/$UUID"
+            echo "$CURRENT_STATUS $ELAPSED" > "$state_file"
         fi
 
-        # Останавливаем MPD и очищаем очередь, чтобы освободить дескрипторы файлов флешки
-        run_mpc stop
-        run_mpc clear
+        run_mpc stop >/dev/null 2>&1 || true
+        run_mpc clear >/dev/null 2>&1 || true
         
-        # Ленивое размонтирование (на случай, если флешку уже выдернули физически)
+        # Размонтируем физический носитель
         umount -l "$MOUNT_POINT"
 
-        # Включаем Wi-Fi обратно для возможности удаленного SSH доступа без флешки
+        # Жесткий сброс MPD, чтобы стереть из его памяти "призрачные треки"
+        restart_user_mpd
+        run_mpc update --wait >/dev/null 2>&1 || true
+
+        # Возвращаем Wi-Fi для удаленного доступа
         echo "Включение Wi-Fi интерфейса..."
         ip link set wlan0 up 2>/dev/null || true
         ;;
