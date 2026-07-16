@@ -1,5 +1,5 @@
 PACKAGE_NAME=rpi-portable-player
-VERSION=1.0.10
+VERSION=1.0.11
 BUILD_DIR=build
 
 # Объявляем все цели как псевдоцели, чтобы избежать конфликтов с именами файлов
@@ -34,6 +34,7 @@ build_structure: clean
 	cp etc/wireplumber/wireplumber.conf.d/50-bluez-no-seat.conf $(BUILD_DIR)/etc/wireplumber/wireplumber.conf.d/
 
 	# Копируем исполняемые скрипты
+	cp usr/local/bin/player-functions $(BUILD_DIR)/usr/local/bin/
 	cp usr/local/bin/music-mount $(BUILD_DIR)/usr/local/bin/
 	cp usr/local/bin/gravity-daemon $(BUILD_DIR)/usr/local/bin/
 	cp usr/local/bin/gravity-player $(BUILD_DIR)/usr/local/bin/
