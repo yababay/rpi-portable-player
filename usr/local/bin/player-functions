@@ -16,9 +16,19 @@ restart_user_mpd() {
     sleep 0.8
 }
 
+get_uuid () {
+    local device=$(mount | grep "/mnt/music" | egrep -o "^\/dev\/[a-z0-9]+")
+    /sbin/blkid -o value -s UUID "$device" 2>/dev/null
+}
+
+get_state_file () {
+    local uuid=$(get_uuid)
+    echo "$MPD_CONFIG_DIR/$uuid/state"
+}
+
 # Функция для динамического перестроения mpd.conf под конкретную флешку
 update_mpd_config() {
-    local uuid="$1"
+    local uuid=$(get_uuid)
     local db_file_path="$MPD_CONFIG_DIR/tag_cache" # дефолт
 
     # Если UUID передан, используем выделенную базу данных
@@ -67,9 +77,7 @@ is_bluetooth_ready() {
 }
 
 start_playback() {
-    local device=$(mount | grep "/mnt/music" | egrep -o "^\/dev\/[a-z0-9]+")
-    local uuid=$(/sbin/blkid -o value -s UUID "$device" 2>/dev/null)
-    local state_file="$MPD_CONFIG_DIR/$uuid/state"
+    local state_file=$(get_state_file)
 
     if [ -f "$state_file" ]; then
         read -r TRACK TIME < "$state_file"
