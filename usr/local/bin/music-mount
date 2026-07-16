@@ -1,12 +1,10 @@
 #!/bin/bash
 
-# Настройки
+# Настройки путей
 MOUNT_POINT="/mnt/music"
 STATE_DIR="/var/lib/mpd/usb_states"
 mkdir -p "$STATE_DIR"
 
-# Переменные от udev (работают, если сервис вызван правильно) или фолбек на blkid
-# Для надежности берем UUID конкретно того устройства, которое активировало сервис
 DEVICE="/dev/music"
 UUID=$(/sbin/blkid -o value -s UUID "$DEVICE")
 
@@ -17,19 +15,14 @@ fi
 
 STATE_FILE="$STATE_DIR/$UUID"
 
-# Функция для работы mpc от имени пользователя mabel (чтобы не было проблем с правами)
+# Функция для работы mpc от имени пользователя с UID 1000
 run_mpc() {
-    # Динамически определяем имя пользователя с UID 1000
     local target_user=$(id -nu 1000)
     sudo -u "$target_user" MPD_HOST=127.0.0.1 MPD_PORT=6600 /usr/bin/mpc "$@"
 }
 
 # Функция для проверки, подключено ли хоть одно Bluetooth-аудиоустройство
 is_bluetooth_ready() {
-    # 1. Получаем список всех известных устройств
-    # 2. Оставляем только те, у которых тип "audio-headset" (или наушники/колонки)
-    # 3. Проверяем каждое активное устройство на флаг "Connected: yes"
-    
     local connected_audio_found=0
 
     while read -r mac _; do
@@ -39,10 +32,8 @@ is_bluetooth_ready() {
                 break
             fi
         fi
-    done < <(bluetoothctl devices | grep -E "audio-headset|headphone" | awk '{print $2}')
+    done < <(bluetoothctl devices | grep -E "JBL|audio-headset|headphone" | awk '{print $2}')
 
-    # Если цикл выше ничего не нашел (в Armbian icon может не распарситься),
-    # делаем фолбек — ищем вообще любое подключенное BT-устройство
     if [ "$connected_audio_found" -eq 0 ]; then
         if bluetoothctl info | grep -q "Connected: yes"; then
             connected_audio_found=1
@@ -50,24 +41,24 @@ is_bluetooth_ready() {
     fi
 
     if [ "$connected_audio_found" -eq 1 ]; then
-        return 0 # Устройство подключено
+        return 0
     else
-        return 1 # Никого нет
+        return 1
     fi
 }
 
-# Функция для запуска воспроизведения с учетом сохраненного состояния
+# Централизованная функция запуска воспроизведения с учетом сохраненного состояния
 start_playback() {
     if [ -f "$STATE_FILE" ]; then
         read -r TRACK TIME < "$STATE_FILE"
         if [[ "$TRACK" =~ ^[0-9]+$ ]] && [[ "$TIME" =~ ^[0-9]+$ ]]; then
+            echo "Восстановление сохраненной позиции: Трек $TRACK, Время $TIME"
             run_mpc play "$TRACK"
             run_mpc seek "$TIME"
         else
             run_mpc play 1
         fi
     else
-        # Если плейлист autoplay, то play 1, иначе (для listall) просто play
         if [ -f "$MOUNT_POINT/autoplay.m3u" ]; then
             run_mpc play 1
         else
@@ -78,60 +69,74 @@ start_playback() {
 
 case "$1" in
     start)
-        echo "Монтирование флешки $UUID..."
-        mount "$DEVICE" "$MOUNT_POINT" || exit 1
-        
-        # Отключаем Wi-Fi при первом подключении флешки
-        ip link set wlan0 down 2>/dev/null || true
+        # Проверяем, примонтирована ли уже папка. Если нет — монтируем.
+        if ! mountpoint -q "$MOUNT_POINT"; then
+            echo "Монтирование флешки $UUID в $MOUNT_POINT..."
+            mount "$DEVICE" "$MOUNT_POINT" || exit 1
+            
+            # Обновляем базу данных MPD только при первом монтировании флешки
+            run_mpc update
+            run_mpc clear
 
-        run_mpc update
-        run_mpc clear
-
-        if [ -f "$MOUNT_POINT/autoplay.m3u" ]; then
-            run_mpc random off
-            while read -r line || [ -n "$line" ]; do
-                [[ "$line" =~ ^# ]] && continue
-                [[ -z "$line" ]] && continue
-                run_mpc add "$line"
-            done < "$MOUNT_POINT/autoplay.m3u"
-
-            if [ -f "$STATE_FILE" ]; then
-                read -r TRACK TIME < "$STATE_FILE"
-                if [[ "$TRACK" =~ ^[0-9]+$ ]] && [[ "$TIME" =~ ^[0-9]+$ ]]; then
-                    run_mpc play "$TRACK"
-                    run_mpc seek "$TIME"
-                else
-                    run_mpc play 1
-                fi
+            # Заполнение очереди (autoplay.m3u или сканирование каталога)
+            if [ -f "$MOUNT_POINT/autoplay.m3u" ]; then
+                run_mpc random off
+                while read -r line || [ -n "$line" ]; do
+                    [[ "$line" =~ ^# ]] && continue
+                    [[ -z "$line" ]] && continue
+                    run_mpc add "$line"
+                done < "$MOUNT_POINT/autoplay.m3u"
             else
-                run_mpc play 1
+                run_mpc listall | run_mpc add
+                run_mpc random on
             fi
         else
-            run_mpc listall | run_mpc add
-            run_mpc random on
-            run_mpc play
+            echo "Флешка уже примонтирована, пропускаем шаг mount."
+        fi
+        
+        # Действия, которые должны выполняться ВСЕГДА при вызове блока start:
+        
+        # Жестко отключаем Wi-Fi для защиты звукового потока от наводок
+        echo "Отключение Wi-Fi интерфейса..."
+        ip link set wlan0 down 2>/dev/null || true
+
+        # Считываем состояние гравитационного датчика (3-я линия на gpiochip1)
+        GRAVITY_STATE=$(gpioget -c "gpiochip1" 3 | cut -d'=' -f2 | tr -d '"')
+
+        if [ "$GRAVITY_STATE" = "active" ]; then
+            echo "Плеер находится в режиме сна (перевернут). Музыка подготовлена, но запуск отложен."
+        else
+            # Если плеер стоит ровно, проверяем наушники и запускаем звук
+            if is_bluetooth_ready; then
+                echo "Bluetooth-наушники обнаружены. Запуск воспроизведения..."
+                start_playback
+            else
+                echo "Флешка готова, но Bluetooth-устройства не найдены. Ожидаем подключения..."
+            fi
         fi
         ;;
-   stop)
+
+    stop)
         echo "Сохранение состояния и размонтирование флешки $UUID..."
         
-        # Получаем текущий трек и позицию перед остановкой
-        # mpc status выдает специфический формат, выдергиваем номер трека и секунды
-        CURRENT_STATUS=$(run_mpc status "%queuepos% %time%")
-        TRACK=$(echo "$CURRENT_STATUS" | awk '{print $1}')
-        # Переводим mm:ss в секунды, если нужно, или используем сырые секунды %elapsed%
+        # Выдергиваем текущую позицию перед извлечением
+        CURRENT_STATUS=$(run_mpc status "%queuepos%")
         ELAPSED=$(run_mpc status "%elapsed%")
         
-        # Если плеер что-то играл, сохраняем это
-        if [ -n "$TRACK" ] && [ "$TRACK" != "0" ]; then
-            echo "$TRACK $ELAPSED" > "$STATE_FILE"
+        if [ -n "$CURRENT_STATUS" ] && [ "$CURRENT_STATUS" != "0" ]; then
+            # Сохраняем позицию в файл, привязанный к UUID флешки
+            echo "$CURRENT_STATUS $ELAPSED" > "$STATE_FILE"
         fi
 
-        # Останавливаем воспроизведение и очищаем очередь, чтобы MPD не держал файлы
+        # Останавливаем MPD и очищаем очередь, чтобы освободить дескрипторы файлов флешки
         run_mpc stop
         run_mpc clear
         
-        # Ленивое размонтирование (флешку уже могли выдернуть)
+        # Ленивое размонтирование (на случай, если флешку уже выдернули физически)
         umount -l "$MOUNT_POINT"
+
+        # Включаем Wi-Fi обратно для возможности удаленного SSH доступа без флешки
+        echo "Включение Wi-Fi интерфейса..."
+        ip link set wlan0 up 2>/dev/null || true
         ;;
 esac
