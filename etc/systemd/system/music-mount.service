@@ -6,5 +6,5 @@ After=dev-music.device
 Type=oneshot
 ExecStart=/usr/local/bin/music-mount start
 
-[Install]
-WantedBy=multi-user.target
+# [Install]
+# WantedBy=multi-user.target
