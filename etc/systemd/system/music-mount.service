@@ -1,16 +1,10 @@
 [Unit]
-Description=Управление монтированием USB-флешки с музыкой
-# Привязываем сервис к udev-ноде флешки. Если она исчезнет — сервис принудительно остановится
-BindsTo=dev-music.device
+Description=Mount USB Music Drive
 After=dev-music.device
 
 [Service]
 Type=oneshot
-RemainAfterExit=yes
-# Что делать при подключении флешки:
 ExecStart=/usr/local/bin/music-mount start
-# Что делать при физическом отключении (извлечении) флешки:
-ExecStop=/usr/local/bin/music-mount stop
 
 [Install]
 WantedBy=multi-user.target
