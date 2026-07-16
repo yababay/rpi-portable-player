@@ -3,23 +3,31 @@
 CHIP="gpiochip1"
 LINE=3
 
-# Считываем стартовое состояние (возвращает "3"=active или "3"=inactive)
-# Вырезаем только само слово после знака равенства
-LAST_STATE=$(gpioget -c "$CHIP" "$LINE" | cut -d'=' -f2)
+# Функция для получения чистого статуса (active или inactive) без кавычек
+get_clean_state() {
+    gpioget -c "$CHIP" "$LINE" | cut -d'=' -f2 | tr -d '"'
+}
 
-# Запускаем мониторинг линии
+echo "Запуск gravity-daemon. Мониторинг линии $LINE на $CHIP..." | logger -t gravity-daemon
+
+LAST_STATE=$(get_clean_state)
+echo "Начальное состояние датчика: $LAST_STATE" | logger -t gravity-daemon
+
+# В gpiod v2.x gpiomon выводит события при каждом изменении уровня.
+# Мы просто реагируем на факт вывода новой строки утилитой gpiomon
 gpiomon -c "$CHIP" "$LINE" | while read -r event; do
-    # Как только прилетело событие прерывания, считываем актуальный статус пина
-    CURRENT_STATE=$(gpioget -c "$CHIP" "$LINE" | cut -d'=' -f2)
+    CURRENT_STATE=$(get_clean_state)
     
-    # Защита от дребезга контактов шарика: если состояние действительно изменилось
+    # Логируем сырое событие для отладки
+    echo "Перехват прерывания. Текущее состояние: $CURRENT_STATE, Прошлое: $LAST_STATE" | logger -t gravity-daemon
+    
     if [ "$CURRENT_STATE" != "$LAST_STATE" ]; then
         if [ "$CURRENT_STATE" = "active" ]; then
-            # Цепь разомкнулась, сработала подтяжка -> плеер перевернули вверх дном
-            /usr/local/bin/gravity-player sleep
+            echo "Датчик сработал: active (корпус перевернут). Вызов gravity-player sleep..." | logger -t gravity-daemon
+            /usr/local/bin/gravity-player sleep 2>&1 | logger -t gravity-daemon
         elif [ "$CURRENT_STATE" = "inactive" ]; then
-            # Цепь замкнулась на GND -> плеер вернули в нормальное положение
-            /usr/local/bin/gravity-player wake
+            echo "Датчик сработал: inactive (корпус возвращен). Вызов gravity-player wake..." | logger -t gravity-daemon
+            /usr/local/bin/gravity-player wake 2>&1 | logger -t gravity-daemon
         fi
         LAST_STATE=$CURRENT_STATE
     fi
