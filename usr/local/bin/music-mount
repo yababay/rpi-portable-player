@@ -79,6 +79,10 @@ start_playback() {
 case "$1" in
     start)
         echo "Монтирование флешки $UUID..."
+        # [НОВОЕ] Отключаем Wi-Fi для устранения наводок на Bluetooth и снижения энергопотребления
+	#         echo "Отключение Wi-Fi интерфейса..."
+	ip link set wlan0 down 2>/dev/null || true
+
         mount "$DEVICE" "$MOUNT_POINT" || exit 1
         
         run_mpc update
