@@ -103,3 +103,20 @@ start_playback() {
     run_mpc repeat on
     run_mpc play
 }
+
+stop_playback () {
+
+        # Пробуем сохранить позицию. Если MPD заклинило — пишем лог и идем дальше
+        CURRENT_STATUS=$(run_mpc status "%queuepos%" 2>/dev/null)
+        ELAPSED=$(run_mpc status "%elapsed%" 2>/dev/null)
+        
+        if [ -n "$CURRENT_STATUS" ] && [ "$CURRENT_STATUS" != "0" ]; then
+            local state_file=$(get_state_file)
+            echo "$CURRENT_STATUS $ELAPSED" > "$state_file"
+        fi
+        
+        run_mpc stop >/dev/null 2>&1 || true
+        run_mpc clear >/dev/null 2>&1 || true
+        
+
+}
