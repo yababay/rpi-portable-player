@@ -5,6 +5,7 @@ Requires=bluetooth.service
 
 [Service]
 Type=simple
+ExecStartPre=/usr/bin/ip link set wlan0 down
 ExecStart=/usr/local/bin/bluetooth-audio
 Restart=always
 RestartSec=3
