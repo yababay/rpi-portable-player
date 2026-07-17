@@ -1,32 +1,28 @@
 #!/bin/bash
 
-CHIP="gpiochip1"
-LINE=3
-
-# Функция для получения чистого статуса (active или inactive) без кавычек
-get_clean_state() {
-    gpioget -c "$CHIP" "$LINE" | cut -d'=' -f2 | tr -d '"'
-}
+# Подключаем общую библиотеку функций
+source /usr/local/bin/player-functions
 
 echo "Запуск gravity-daemon в режиме опроса линии $LINE на $CHIP..." | logger -t gravity-daemon
 
 # Считываем стартовое состояние
-LAST_STATE=$(get_clean_state)
+LAST_STATE=$(get_gravity_state)
 echo "Начальное состояние датчика: $LAST_STATE" | logger -t gravity-daemon
 
 # Бесконечный цикл опроса с шагом 0.3 секунды
 while true; do
-    CURRENT_STATE=$(get_clean_state)
+    CURRENT_STATE=$(get_gravity_state)
     
     if [ "$CURRENT_STATE" != "$LAST_STATE" ] && [ -n "$CURRENT_STATE" ]; then
         echo "Датчик изменил состояние. Текущее: $CURRENT_STATE, Прошлое: $LAST_STATE" | logger -t gravity-daemon
         
         if [ "$CURRENT_STATE" = "active" ]; then
             echo "Корпус перевернут. Вызов gravity-player sleep..." | logger -t gravity-daemon
-            /usr/local/bin/gravity-player sleep 2>&1 | logger -t gravity-daemon
+            # /usr/local/bin/gravity-player sleep 2>&1 | logger -t gravity-daemon
         elif [ "$CURRENT_STATE" = "inactive" ]; then
             echo "Корпус возвращен в норму. Вызов gravity-player wake..." | logger -t gravity-daemon
-            /usr/local/bin/gravity-player wake 2>&1 | logger -t gravity-daemon
+            # /usr/local/bin/gravity-player wake 2>&1 | logger -t gravity-daemon
+            check_and_play
         fi
         LAST_STATE=$CURRENT_STATE
     fi
