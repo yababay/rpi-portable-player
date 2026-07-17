@@ -6,6 +6,7 @@ TARGET_USER=$(id -nu 1000 2>/dev/null || echo "mabel")
 USER_HOME=$(getent passwd "$TARGET_USER" | cut -d: -f6)
 MPD_CONFIG_DIR="$USER_HOME/.config/mpd"
 MPD_CONFIG_FILE="$MPD_CONFIG_DIR/mpd.conf"
+BT_MAC_FILE="$MPD_CONFIG_DIR/bt_mac"
 
 run_mpc() {
     sudo -u "$TARGET_USER" MPD_HOST=127.0.0.1 MPD_PORT=6600 /usr/bin/mpc "$@"
@@ -65,7 +66,6 @@ EOF
 }
 
 find_connected_audio () {
-    BT_MAC_FILE="$MPD_CONFIG_DIR/bt_mac"
     rm -f "$BT_MAC_FILE"
     bluetoothctl devices | egrep -o '([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}' | while read mac; do
         if bluetoothctl info "$mac" | grep -q "Connected: yes"; then
