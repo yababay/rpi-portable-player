@@ -37,20 +37,22 @@ update_mpd_config() {
 
     # Если UUID передан, используем выделенную базу данных
     if [ -n "$uuid" ]; then
-        db_file_path="$MPD_CONFIG_DIR/$uuid/tag_cache"
+        db_dir="$MPD_CONFIG_DIR/$uuid"
+        db_file_path="$db_dir/tag_cache"
         # Создаем пустой файл базы, если флешка новая, чтобы у MPD были права
+        mkdir -p "$db_dir"
         touch "$db_file_path"
-        chown "$TARGET_USER:$TARGET_USER" "$db_file_path"
+        chown "$TARGET_USER:$TARGET_USER" "$db_dir" -R
     fi
 
-    cat << EOF > "$mpd_config_dir/mpd.conf"
+    cat << EOF > "$MPD_CONFIG_DIR/mpd.conf"
 music_directory         "$MOUNT_POINT"
 playlist_directory      "$MOUNT_POINT"
 db_file                 "$db_file_path"
-log_file                "$mpd_config_dir/mpd.log"
-pid_file                "$mpd_config_dir/pid"
-state_file              "$mpd_config_dir/state"
-sticker_file            "$mpd_config_dir/sticker.sql"
+log_file                "$MPD_CONFIG_DIR/mpd.log"
+pid_file                "$MPD_CONFIG_DIR/pid"
+state_file              "$MPD_CONFIG_DIR/state"
+sticker_file            "$MPD_CONFIG_DIR/sticker.sql"
 
 audio_output {
         type            "pipewire"
@@ -58,9 +60,7 @@ audio_output {
         mixer_type      "software"
 }
 EOF
-    chown "$TARGET_USER:$TARGET_USER" "$mpd_config_dir/mpd.conf"
-    restart_user_mpd
-    run_mpc update
+    chown "$TARGET_USER:$TARGET_USER" "$MPD_CONFIG_DIR/mpd.conf"
 }
 
 is_bluetooth_ready() {
