@@ -15,13 +15,14 @@ run_mpc() {
 }
 
 restart_user_mpd() {
-    echo "Перезапуск пользовательского MPD..."
+    echo "Перезапуск пользовательского MPD..." | logger -t player-functions
     sudo -u "$TARGET_USER" DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus systemctl --user restart mpd.service
     sleep 0.8
 }
 
 get_uuid () {
-    local device=$(mount | grep "/mnt/music" | egrep -o "^\/dev\/[a-z0-9]+")
+    # Надежный сбор устройства через mount
+    local device=$(mount | grep "$MOUNT_POINT" | egrep -o "^\/dev\/[a-z0-9]+")
     /sbin/blkid -o value -s UUID "$device" 2>/dev/null
 }
 
@@ -30,21 +31,17 @@ get_state_file () {
     echo "$MPD_CONFIG_DIR/$uuid/state"
 }
 
-# Функция для получения чистого статуса (active или inactive) без кавычек
 get_gravity_state () {
     gpioget -c "$CHIP" "$LINE" | cut -d'=' -f2 | tr -d '"'
 }
 
-# Функция для динамического перестроения mpd.conf под конкретную флешку
 update_mpd_config() {
     local uuid=$(get_uuid)
-    local db_file_path="$MPD_CONFIG_DIR/tag_cache" # дефолт
+    local db_file_path="$MPD_CONFIG_DIR/tag_cache" 
 
-    # Если UUID передан, используем выделенную базу данных
     if [ -n "$uuid" ]; then
         db_dir="$MPD_CONFIG_DIR/$uuid"
         db_file_path="$db_dir/tag_cache"
-        # Создаем пустой файл базы, если флешка новая, чтобы у MPD были права
         mkdir -p "$db_dir"
         touch "$db_file_path"
         chown "$TARGET_USER:$TARGET_USER" "$db_dir" -R
@@ -70,6 +67,7 @@ EOF
 
 find_connected_audio () {
     rm -f "$BT_MAC_FILE"
+    # Ищем подключенные аудио-устройства среди всех известных девайсов
     bluetoothctl devices | egrep -o '([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}' | while read mac; do
         if bluetoothctl info "$mac" | grep -q "Connected: yes"; then
             echo "$mac" > "$BT_MAC_FILE"
@@ -78,68 +76,73 @@ find_connected_audio () {
     done
 }
 
+is_bluetooth_ready() {
+    find_connected_audio
+    [ -f "$BT_MAC_FILE" ] && return 0 || return 1
+}
+
 check_and_play () {
     local track="$1"
     local seek_time="$2"
 
-    # Если директория с музыкой пуста:
-    if [ -z "$(ls $MOUNT_POINT)" ]; then
-        echo "Не удалось примонтировать флешку или флешка не вставлена."
+    if [ -z "$(ls -A $MOUNT_POINT 2>/dev/null)" ]; then
+        echo "Ошибка: Флешка не примонтирована или пуста." | logger -t player-functions
         return 0
     fi
 
-    # Проверяем гравитационный датчик.
-    if [ "$(get_gravity_state)" == "active" ]; then
-        echo "Проигрыватель перевёрнут, ждём пробуждения…"
+    if [ "$(get_gravity_state)" = "active" ]; then
+        echo "Проигрыватель перевёрнут, отмена старта." | logger -t player-functions
         return 0
     fi
 
-    # Проверяем аудиоустройство.
-    find_connected_audio
-    if [ ! -f "$BT_MAC_FILE" ]; then
-        echo "Не удалось найти ни одного подключенного аудиоустройства."
+    if ! is_bluetooth_ready; then
+        echo "Ошибка: Нет подключенных аудиоустройств." | logger -t player-functions
         return 0
     else
-        /usr/bin/bluetoothctl connect "$(cat $BT_MAC_FILE)"
+        # Восстанавливаем коннект
+        /usr/bin/bluetoothctl connect "$(cat $BT_MAC_FILE)" >/dev/null 2>&1
     fi
 
-    # Включаем бесконечное воспроизведение в любом случае.
     run_mpc repeat on
 
-    # Восстанавливаем последний трек, если проигрыватель его запомнил:
+    # Если переданы конкретные координаты трека (первый запуск флешки)
     if [ -n "$track" ] && [ -n "$seek_time" ]; then
         run_mpc play "$track"
         run_mpc seek "$seek_time"
-        return 0
-    fi
-
-    # Если флешка не поменялась, просто включаем воспроизведение.
-    local uuid=$(get_uuid)
-    if [ -n "$(cat $MPD_CONFIG_FILE | grep $(get_uuid))" ]; then
+    else
+        # Во всех остальных случаях (снятие с паузы по датчику или D-Bus) — просто играем
         run_mpc play
-        return 0
     fi
 }
 
 start_playback() {
-    # Пытаемся включить воспроизведение с другой флешки.
+    echo "Инициализация новой флешки..." | logger -t player-functions
     update_mpd_config
     restart_user_mpd
-    run_mpc update
+    
+    # Асинхронное фоновое обновление без блокирующего --wait
+    run_mpc update >/dev/null 2>&1 || true
 
     local state_file=$(get_state_file)
 
     if [ -f "$state_file" ]; then
         read -r TRACK TIME < "$state_file"
         if [[ "$TRACK" =~ ^[0-9]+$ ]] && [[ "$TIME" =~ ^[0-9]+$ ]]; then
-            echo "Восстановление позиции: Трек $TRACK, Время $TIME"
+            echo "Найден файл состояния флешки. Восстановление позиции..." | logger -t player-functions
             check_and_play "$TRACK" "$TIME"
         else
             check_and_play
         fi
     else
+        echo "Новая флешка без истории воспроизведения. Заполнение очереди..." | logger -t player-functions
+        run_mpc clear
         if [ -f "$MOUNT_POINT/autoplay.m3u" ]; then
-            run_mpc load autoplay
+            run_mpc random off
+            while read -r line || [ -n "$line" ]; do
+                [[ "$line" =~ ^# ]] && continue
+                [[ -z "$line" ]] && continue
+                run_mpc add "$line"
+            done < "$MOUNT_POINT/autoplay.m3u"
         else 
             run_mpc listall | run_mpc add
             run_mpc shuffle
@@ -149,17 +152,15 @@ start_playback() {
 }
 
 stop_playback () {
-
-        # Пробуем сохранить позицию. Если MPD заклинило — пишем лог и идем дальше
-        CURRENT_STATUS=$(run_mpc status "%queuepos%" 2>/dev/null)
-        ELAPSED=$(run_mpc status "%elapsed%" 2>/dev/null)
-        
-        if [ -n "$CURRENT_STATUS" ] && [ "$CURRENT_STATUS" != "0" ]; then
-            local state_file=$(get_state_file)
-            echo "$CURRENT_STATUS $ELAPSED" > "$state_file"
-        fi
-        
-        run_mpc stop >/dev/null 2>&1 || true
-        run_mpc clear >/dev/null 2>&1 || true
-        /usr/bin/umount -l "$MOUNT_POINT"
+    echo "Остановка воспроизведения и сохранение состояния..." | logger -t player-functions
+    CURRENT_STATUS=$(run_mpc status "%queuepos%" 2>/dev/null)
+    ELAPSED=$(run_mpc status "%elapsed%" 2>/dev/null)
+    
+    if [ -n "$CURRENT_STATUS" ] && [ "$CURRENT_STATUS" != "0" ]; then
+        local state_file=$(get_state_file)
+        echo "$CURRENT_STATUS $ELAPSED" > "$state_file"
+    fi
+    
+    run_mpc stop >/dev/null 2>&1 || true
+    run_mpc clear >/dev/null 2>&1 || true
 }
