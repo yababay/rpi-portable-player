@@ -9,7 +9,6 @@ case "$1" in
         run_mpc pause >/dev/null 2>&1 || true
         bluetoothctl disconnect
         echo "powersave" | tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor > /dev/null
-        ip link set wlan0 up 2>/dev/null || true
         ;;
         
     wake)
