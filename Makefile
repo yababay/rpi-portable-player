@@ -67,9 +67,11 @@ git:
 
 pull:
 	sudo ip link set wlan0 up
+	sleep 3
 	git pull origin main
 
 push:
 	sudo ip link set wlan0 up
+	sleep 3
 	git push origin main
 
