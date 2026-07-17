@@ -31,8 +31,35 @@ get_state_file () {
     echo "$MPD_CONFIG_DIR/$uuid/state"
 }
 
+# Функция для получения устойчивого статуса датчика с защитой от дребезга контактов
 get_gravity_state () {
-    gpioget -c "$CHIP" "$LINE" | cut -d'=' -f2 | tr -d '"'
+    # Вспомогательный вызов для считывания сырого значения (active или inactive)
+    get_raw_state() {
+        gpioget -c "$CHIP" "$LINE" | cut -d'=' -f2 | tr -d '"'
+    }
+
+    # Делаем первый замер
+    local first_sample=$(get_raw_state)
+    
+    # Задаем количество проверок и интервал (4 проверки по 0.05 сек = 0.2 секунды на фильтрацию)
+    local total_samples=4
+    local delay=0.05
+
+    for ((i=1; i<total_samples; i++)); do
+        sleep $delay
+        local next_sample=$(get_raw_state)
+        
+        # Если хоть один из последующих замеров отличается от первого — это дребезг шарика!
+        if [ "$next_sample" != "$first_sample" ]; then
+            # Возвращаем пустую строку, чтобы gravity-daemon понял: состояние нестабильно, 
+            # и проигнорировал это случайное бултыхание
+            echo ""
+            return 0
+        fi
+    done
+
+    # Если все проверки совпали — значит, положение действительно изменилось и зафиксировалось
+    echo "$first_sample"
 }
 
 update_mpd_config() {
