@@ -1,5 +1,5 @@
 PACKAGE_NAME=rpi-portable-player
-VERSION=1.0.16
+VERSION=1.0.17
 BUILD_DIR=build
 
 # Объявляем все цели как псевдоцели, чтобы избежать конфликтов с именами файлов
@@ -38,10 +38,8 @@ build_structure: clean
 	cp usr/local/bin/player-functions $(BUILD_DIR)/usr/local/bin/
 	cp usr/local/bin/music-mount $(BUILD_DIR)/usr/local/bin/
 	cp usr/local/bin/gravity-daemon $(BUILD_DIR)/usr/local/bin/
-	cp usr/local/bin/gravity-player $(BUILD_DIR)/usr/local/bin/
 	chmod +x $(BUILD_DIR)/usr/local/bin/music-mount
 	chmod +x $(BUILD_DIR)/usr/local/bin/gravity-daemon
-	chmod +x $(BUILD_DIR)/usr/local/bin/gravity-player
 
 package: build_structure
 	# Собираем дебиан-пакет
