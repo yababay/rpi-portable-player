@@ -93,12 +93,39 @@ is_bluetooth_ready() {
 }
 
 start_playback() {
-    local uuid=$(get_uuid)
+
+    # Если директория с музыкой пуста:
+    if [ -z "$(ls $MOUNT_POINT)" ]; then
+        echo "Не удалось примонтировать флешку или флешка не вставлена."
+        return 0
+    fi
+
+    # Проверяем гравитационный датчик.
+    if [ "$(get_gravity_state)" == "active" ]; then
+        echo "Проигрыватель перевёрнут, ждём пробуждения…"
+        return 0
+    fi
+
+    # Проверяем аудиоустройство.
+    find_connected_audio
+    if [ ! -f "$BT_MAC_FILE" ]; then
+        echo "Не удалось найти ни одного подключенного аудиоустройства."
+        return 0
+    fi
+
+    # Включаем бесконечное воспроизведение.
     run_mpc repeat on
+
+    # Если флешка не поменялась, просто включаем воспроизведение.
+    local uuid=$(get_uuid)
     if [ -n "$(cat $MPD_CONFIG_FILE | grep $(get_uuid))" ]; then
         run_mpc play
         return 0
     fi
+
+    # Пытаемся включить воспроизведение с другой флешки.
+    update_mpd_config
+    restart_user_mpd
 
     local state_file=$(get_state_file)
 
@@ -118,6 +145,7 @@ start_playback() {
             run_mpc listall | run_mpc add
             run_mpc shuffle
         fi
+        run_mpc play 1
     fi
 }
 
