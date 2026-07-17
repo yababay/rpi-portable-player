@@ -7,6 +7,8 @@ USER_HOME=$(getent passwd "$TARGET_USER" | cut -d: -f6)
 MPD_CONFIG_DIR="$USER_HOME/.config/mpd"
 MPD_CONFIG_FILE="$MPD_CONFIG_DIR/mpd.conf"
 BT_MAC_FILE="$MPD_CONFIG_DIR/bt_mac"
+CHIP="gpiochip1"
+LINE=3
 
 run_mpc() {
     sudo -u "$TARGET_USER" MPD_HOST=127.0.0.1 MPD_PORT=6600 /usr/bin/mpc "$@"
@@ -28,8 +30,9 @@ get_state_file () {
     echo "$MPD_CONFIG_DIR/$uuid/state"
 }
 
+# Функция для получения чистого статуса (active или inactive) без кавычек
 get_gravity_state () {
-    gpioget -c "gpiochip1" 3 | cut -d'=' -f2 | tr -d '"'
+    gpioget -c "$CHIP" "$LINE" | cut -d'=' -f2 | tr -d '"'
 }
 
 # Функция для динамического перестроения mpd.conf под конкретную флешку
