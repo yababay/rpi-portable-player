@@ -1,7 +1,0 @@
-[Unit]
-Description=Unmount USB Music Drive and Save State
-
-[Service]
-Type=oneshot
-ExecStart=/usr/local/bin/music-mount stop
-ExecStartPost=/usr/bin/ip link set wlan0 up 2>/dev/null || true
