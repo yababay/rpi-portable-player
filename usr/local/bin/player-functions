@@ -5,6 +5,7 @@ MOUNT_POINT="/mnt/music"
 TARGET_USER=$(id -nu 1000 2>/dev/null || echo "mabel")
 USER_HOME=$(getent passwd "$TARGET_USER" | cut -d: -f6)
 MPD_CONFIG_DIR="$USER_HOME/.config/mpd"
+MPD_CONFIG_FILE="$MPD_CONFIG_DIR/mpd.conf"
 
 run_mpc() {
     sudo -u "$TARGET_USER" MPD_HOST=127.0.0.1 MPD_PORT=6600 /usr/bin/mpc "$@"
@@ -45,7 +46,7 @@ update_mpd_config() {
         chown "$TARGET_USER:$TARGET_USER" "$db_dir" -R
     fi
 
-    cat << EOF > "$MPD_CONFIG_DIR/mpd.conf"
+    cat << EOF > "$MPD_CONFIG_FILE"
 music_directory         "$MOUNT_POINT"
 playlist_directory      "$MOUNT_POINT"
 db_file                 "$db_file_path"
@@ -60,7 +61,18 @@ audio_output {
         mixer_type      "software"
 }
 EOF
-    chown "$TARGET_USER:$TARGET_USER" "$MPD_CONFIG_DIR/mpd.conf"
+    chown "$TARGET_USER:$TARGET_USER" "$MPD_CONFIG_FILE"
+}
+
+find_connected_audio () {
+    BT_MAC_FILE="$MPD_CONFIG_DIR/bt_mac"
+    rm -f "$BT_MAC_FILE"
+    bluetoothctl devices | egrep -o '([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}' | while read mac; do
+        if bluetoothctl info "$mac" | grep -q "Connected: yes"; then
+            echo "$mac" > "$BT_MAC_FILE"
+            break
+        fi
+    done
 }
 
 is_bluetooth_ready() {
@@ -81,6 +93,13 @@ is_bluetooth_ready() {
 }
 
 start_playback() {
+    local uuid=$(get_uuid)
+    run_mpc repeat on
+    if [ -n "$(cat $MPD_CONFIG_FILE | grep $(get_uuid))" ]; then
+        run_mpc play
+        return 0
+    fi
+
     local state_file=$(get_state_file)
 
     if [ -f "$state_file" ]; then
@@ -100,8 +119,6 @@ start_playback() {
             run_mpc shuffle
         fi
     fi
-    run_mpc repeat on
-    run_mpc play
 }
 
 stop_playback () {
@@ -117,6 +134,4 @@ stop_playback () {
         
         run_mpc stop >/dev/null 2>&1 || true
         run_mpc clear >/dev/null 2>&1 || true
-        
-
 }
