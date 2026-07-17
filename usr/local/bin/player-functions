@@ -111,6 +111,8 @@ start_playback() {
     if [ ! -f "$BT_MAC_FILE" ]; then
         echo "Не удалось найти ни одного подключенного аудиоустройства."
         return 0
+    else
+        /usr/bin/bluetoothctl connect "$(cat $BT_MAC_FILE)"
     fi
 
     # Включаем бесконечное воспроизведение.
@@ -163,4 +165,5 @@ stop_playback () {
         
         run_mpc stop >/dev/null 2>&1 || true
         run_mpc clear >/dev/null 2>&1 || true
+        /usr/bin/umount -l "$MOUNT_POINT"
 }
