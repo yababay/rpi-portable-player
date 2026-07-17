@@ -4,10 +4,18 @@
 source /usr/local/bin/player-functions
 
 case "$1" in
+
+    # Если просто нужно проверить аудиоустройства или «умную паузу»:
+    check)
+        check_and_play
+        ;;
+
+    # Стартуем с новой флешки:
     start)
         start_playback
         ;;
 
+    # Флешку вынули:
     stop)
         stop_playback
         ;;
