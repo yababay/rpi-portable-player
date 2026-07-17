@@ -5,9 +5,6 @@ source /usr/local/bin/player-functions
 
 case "$1" in
     start)
-        update_mpd_config
-        restart_user_mpd
-        run_mpc update
         start_playback
         ;;
 
