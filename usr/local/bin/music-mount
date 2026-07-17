@@ -9,9 +9,6 @@ case "$1" in
         ;;
 
     stop)
-        echo "Сохранение состояния и размонтирование флешки $UUID..."
         stop_playback
-        /usr/bin/umount -l "$MOUNT_POINT"
         ;;
 esac
-
