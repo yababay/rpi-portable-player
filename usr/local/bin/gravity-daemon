@@ -19,6 +19,9 @@ while true; do
         if [ "$CURRENT_STATE" = "active" ]; then
             echo "Корпус перевернут. Вызов gravity-player sleep..." | logger -t gravity-daemon
             # /usr/local/bin/gravity-player sleep 2>&1 | logger -t gravity-daemon
+            run_mpc pause >/dev/null 2>&1 || true
+            bluetoothctl disconnect
+            echo "powersave" | tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor > /dev/null
         elif [ "$CURRENT_STATE" = "inactive" ]; then
             echo "Корпус возвращен в норму. Вызов gravity-player wake..." | logger -t gravity-daemon
             # /usr/local/bin/gravity-player wake 2>&1 | logger -t gravity-daemon
