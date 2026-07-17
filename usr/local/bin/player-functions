@@ -126,6 +126,7 @@ start_playback() {
     # Пытаемся включить воспроизведение с другой флешки.
     update_mpd_config
     restart_user_mpd
+    run_mpc update
 
     local state_file=$(get_state_file)
 
