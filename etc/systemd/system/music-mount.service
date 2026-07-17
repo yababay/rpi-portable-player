@@ -6,9 +6,19 @@ After=mnt-music.mount
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-# Понятный переключатель Wi-Fi прямо в конфиге службы:
+
+# Мягко роняем интерфейс перед стартом плеера
 ExecStartPre=/usr/bin/ip link set wlan0 down
 ExecStart=/usr/local/bin/music-mount start
+
+# При извлечении флешки: сначала чистим плеер и сохраняем секунды
+ExecStop=/usr/local/bin/music-mount stop
+
+# Безусловно поднимаем физический линк и заставляем
+# систему заново запросить IP-адрес у вашего роутера:
+ExecStopPost=/usr/bin/ip link set wlan0 up
+ExecStopPost=/usr/bin/systemctl restart systemd-networkd
+
 Restart=on-failure
 RestartSec=2s
 
