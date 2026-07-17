@@ -76,6 +76,8 @@ find_connected_audio () {
 }
 
 check_and_play () {
+    local track="$1"
+    local seek_time="$2"
 
     # Если директория с музыкой пуста:
     if [ -z "$(ls $MOUNT_POINT)" ]; then
@@ -101,6 +103,13 @@ check_and_play () {
     # Включаем бесконечное воспроизведение в любом случае.
     run_mpc repeat on
 
+    # Восстанавливаем последний трек, если проигрыватель его запомнил:
+    if [ -n "$track" ] && [ -n "$seek_time" ]; then
+        run_mpc play "$track"
+        run_mpc seek "$seek_time"
+        return 0
+    fi
+
     # Если флешка не поменялась, просто включаем воспроизведение.
     local uuid=$(get_uuid)
     if [ -n "$(cat $MPD_CONFIG_FILE | grep $(get_uuid))" ]; then
@@ -121,10 +130,9 @@ start_playback() {
         read -r TRACK TIME < "$state_file"
         if [[ "$TRACK" =~ ^[0-9]+$ ]] && [[ "$TIME" =~ ^[0-9]+$ ]]; then
             echo "Восстановление позиции: Трек $TRACK, Время $TIME"
-            run_mpc play "$TRACK"
-            run_mpc seek "$TIME"
+            check_and_play "$TRACK" "$TIME"
         else
-            run_mpc play 1
+            check_and_play
         fi
     else
         if [ -f "$MOUNT_POINT/autoplay.m3u" ]; then
@@ -133,7 +141,7 @@ start_playback() {
             run_mpc listall | run_mpc add
             run_mpc shuffle
         fi
-        run_mpc play 1
+        check_and_play
     fi
 }
 
