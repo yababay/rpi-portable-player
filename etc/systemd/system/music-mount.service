@@ -1,9 +1,12 @@
 [Unit]
-Description=При подключении флешки
+Description=Активация плеера при примонтированной флешке MUSIC
 BindsTo=mnt-music.mount
 After=mnt-music.mount
 
 [Service]
+Type=oneshot
+RemainAfterExit=yes
+# Понятный переключатель Wi-Fi прямо в конфиге службы:
 ExecStartPre=/usr/bin/ip link set wlan0 down
 ExecStart=/usr/local/bin/music-mount start
 Restart=on-failure
